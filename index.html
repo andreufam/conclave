@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Votação por Rodadas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .hidden { display: none; }
+        .option-item { transition: all 0.3s ease; }
+        .option-item.eliminated { background-color: #fecaca; color: #991b1b; text-decoration: line-through; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div id="app-container" class="w-full max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8">
+
+        <!-- Tela Inicial: Criar ou Entrar -->
+        <div id="home-view">
+            <h1 class="text-3xl font-bold text-center text-gray-900">Conclave Mdmucho Texto</h1>
+            <p class="text-center text-gray-600 mt-2 mb-8">Defina as opções para gerar uma nova votação.</p>
+            <div class="space-y-4">
+                <button id="show-create-view-btn" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors">
+                    Criar Nova Votação
+                </button>
+                 <p class="text-center text-sm text-gray-500 pt-4">Para participar, peça ao criador da votação para compartilhar o link com você.</p>
+            </div>
+        </div>
+
+        <!-- Tela de Criação -->
+        <div id="create-view" class="hidden">
+            <h2 class="text-2xl font-bold mb-4">Criar Nova Votação</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="poll-question" class="block text-sm font-medium text-gray-700">Pergunta da votação</label>
+                    <input type="text" id="poll-question" placeholder="Ex: Qual será nosso próximo destino de férias?" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="poll-options" class="block text-sm font-medium text-gray-700">Opções de voto (uma por linha)</label>
+                    <textarea id="poll-options" rows="5" placeholder="Opção 1&#10;Opção 2&#10;Opção 3" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                </div>
+                <div class="flex items-center gap-4">
+                     <button id="back-to-home-btn" class="w-1/3 bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors">Voltar</button>
+                    <button id="create-poll-btn" class="w-2/3 bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors">Criar Votação</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tela do Administrador -->
+        <div id="admin-view" class="hidden">
+            <h2 id="admin-poll-question" class="text-2xl font-bold mb-2"></h2>
+            <p class="text-gray-600 mb-4">Você é o administrador. Compartilhe o link abaixo para que outros possam votar.</p>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700">Link para Votantes</p>
+                <div class="flex mt-1">
+                    <input type="text" id="voter-link" readonly class="flex-1 block w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-l-md shadow-sm">
+                    <button id="copy-link-btn" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-r-md hover:bg-indigo-700">Copiar</button>
+                </div>
+                 <p id="copy-feedback" class="text-sm text-green-600 mt-1 h-5"></p>
+            </div>
+            
+            <div id="admin-status" class="text-center p-4 rounded-lg bg-indigo-50 mb-4"></div>
+
+            <div id="admin-options-container" class="space-y-2 mb-6"></div>
+            
+            <div id="admin-controls"></div>
+        </div>
+
+        <!-- Tela do Votante -->
+        <div id="voter-view" class="hidden">
+            <h2 id="voter-poll-question" class="text-2xl font-bold text-center mb-2"></h2>
+            <div id="voter-status" class="text-center p-4 rounded-lg bg-indigo-50 text-indigo-800 mb-6"></div>
+            <div id="voter-options-container" class="space-y-3"></div>
+        </div>
+
+        <!-- Tela de Vencedor -->
+        <div id="winner-view" class="hidden text-center">
+            <h2 class="text-xl font-semibold mb-2">Votação Encerrada!</h2>
+            <p class="text-gray-600 mb-4">O vencedor é:</p>
+            <div id="winner-name" class="text-4xl font-bold text-indigo-600 p-6 bg-yellow-200 rounded-lg inline-block"></div>
+        </div>
+
+         <!-- Carregando... -->
+        <div id="loading-view" class="hidden text-center">
+            <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-2 text-gray-600">Carregando votação...</p>
+        </div>
+    </div>
+
+    <!-- Módulo Firebase -->
+    <script type="module">
+	    // Cole aqui a configuração do seu projeto Firebase
+	    const firebaseConfig = {
+  apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
+  authDomain: "conclave-mdm.firebaseapp.com",
+  projectId: "conclave-mdm",
+  storageBucket: "conclave-mdm.firebasestorage.app",
+  messagingSenderId: "346904370830",
+  appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
+};
+
+	// Importações do Firebase
+	import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+	import { getFirestore, doc, getDoc, setDoc, addDoc, collection, onSnapshot, query, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+	import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+	// Inicializa o Firebase
+	const app = initializeApp(firebaseConfig);
+	const db = getFirestore(app);
+	const auth = getAuth(app);
+
+	// --- Variáveis de Estado ---
+	let currentPollId = null;
+	let currentUser = null;
+	let pollUnsubscribe = null; // Para desligar o listener do onSnapshot
+
+	// --- Elementos do DOM ---
+	const views = {
+	    home: document.getElementById('home-view'),
+	    create: document.getElementById('create-view'),
+	    admin: document.getElementById('admin-view'),
+	    voter: document.getElementById('voter-view'),
+	    winner: document.getElementById('winner-view'),
+	    loading: document.getElementById('loading-view')
+	};
+	const showCreateViewBtn = document.getElementById('show-create-view-btn');
+	const backToHomeBtn = document.getElementById('back-to-home-btn');
+	const createPollBtn = document.getElementById('create-poll-btn');
+	const copyLinkBtn = document.getElementById('copy-link-btn');
+
+	// --- Funções de UI ---
+	const showView = (viewName) => {
+	    Object.values(views).forEach(view => view.classList.add('hidden'));
+	    if (views[viewName]) {
+		views[viewName].classList.remove('hidden');
+	    }
+	};
+
+	// --- Lógica Principal ---
+	window.onload = () => {
+	    signInAnonymously(auth).catch(error => console.error("Erro na autenticação anônima:", error));
+
+	    onAuthStateChanged(auth, (user) => {
+		if (user) {
+		    currentUser = user;
+		    handleUrlChanges();
+		}
+	    });
+	};
+
+	const handleUrlChanges = () => {
+	    const params = new URLSearchParams(window.location.search);
+	    const pollId = params.get('pollId');
+
+	    if (pollId) {
+		currentPollId = pollId;
+		loadPoll(pollId);
+	    } else {
+		showView('home');
+	    }
+	};
+
+	async function loadPoll(pollId) {
+	    showView('loading');
+	    const pollRef = doc(db, 'polls', pollId);
+
+	    if (pollUnsubscribe) pollUnsubscribe(); // Cancela listener anterior
+
+	    pollUnsubscribe = onSnapshot(pollRef, (pollDoc) => {
+		if (!pollDoc.exists()) {
+		    alert('Votação não encontrada!');
+		    window.location.search = '';
+		    return;
+		}
+
+		const pollData = pollDoc.data();
+		const isAdmin = localStorage.getItem(`admin_${pollId}`) === currentUser.uid;
+
+		if (pollData.status === 'finished') {
+		    renderWinnerView(pollData);
+		} else if (isAdmin) {
+		    renderAdminView(pollData);
+		} else {
+		    renderVoterView(pollData);
+		}
+	    });
+	}
+
+	// --- Funções de Renderização (Views) ---
+
+	function renderAdminView(pollData) {
+	    showView('admin');
+	    document.getElementById('admin-poll-question').textContent = pollData.question;
+
+	    const voterLinkInput = document.getElementById('voter-link');
+	    voterLinkInput.value = `${window.location.origin}${window.location.pathname}?pollId=${currentPollId}`;
+
+	    const adminStatus = document.getElementById('admin-status');
+	    const optionsContainer = document.getElementById('admin-options-container');
+	    const adminControls = document.getElementById('admin-controls');
+
+	    optionsContainer.innerHTML = '';
+
+	    // Renderiza as opções
+	    pollData.options.forEach(opt => {
+		const div = document.createElement('div');
+		div.className = `option-item p-3 border rounded-lg flex justify-between items-center ${!opt.active ? 'eliminated' : 'bg-gray-50'}`;
+		div.innerHTML = `<span>${opt.name}</span> <span class="font-semibold text-gray-500">${pollData.results?.[pollData.round]?.[opt.name] || 0} votos</span>`;
+		optionsContainer.appendChild(div);
+	    });
+
+	    // Atualiza status e controles
+	    adminControls.innerHTML = '';
+	    let button;
+	    switch(pollData.status) {
+		case 'pending':
+		    adminStatus.textContent = `Rodada ${pollData.round}. A votação ainda não começou.`;
+		    button = createButton('Iniciar Rodada 1', startRound);
+		    adminControls.appendChild(button);
+		    break;
+		case 'voting':
+		    adminStatus.textContent = `Rodada ${pollData.round}. Votação em andamento.`;
+		    button = createButton('Encerrar Rodada e Contar Votos', endRound);
+		    adminControls.appendChild(button);
+		    break;
+		case 'results':
+		    adminStatus.textContent = `Rodada ${pollData.round} encerrada. A opção "${pollData.lastEliminated}" foi eliminada.`;
+		    button = createButton(`Iniciar Rodada ${pollData.round + 1}`, startRound);
+		    adminControls.appendChild(button);
+		    break;
+	    }
+	}
+
+	function renderVoterView(pollData) {
+	    showView('voter');
+	    document.getElementById('voter-poll-question').textContent = pollData.question;
+	    const statusDiv = document.getElementById('voter-status');
+	    const optionsContainer = document.getElementById('voter-options-container');
+	    optionsContainer.innerHTML = '';
+
+	    const userVotePath = `polls/${currentPollId}/votes_round_${pollData.round}`;
+	    const userVoteRef = doc(db, userVotePath, currentUser.uid);
+
+	    getDoc(userVoteRef).then(voteDoc => {
+		const hasVoted = voteDoc.exists();
+
+		if (pollData.status === 'pending') {
+		    statusDiv.textContent = 'Aguardando o administrador iniciar a votação...';
+		} else if (hasVoted) {
+		    statusDiv.textContent = `Seu voto foi computado! Aguardando o fim da Rodada ${pollData.round}.`;
+		} else if (pollData.status === 'voting') {
+		    statusDiv.textContent = `Rodada ${pollData.round}. Por favor, escolha uma opção:`;
+		    pollData.options.filter(opt => opt.active).forEach(opt => {
+			const button = document.createElement('button');
+			button.textContent = opt.name;
+			button.className = 'w-full text-left bg-white p-4 border rounded-lg hover:bg-indigo-50 hover:border-indigo-500 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500';
+			button.onclick = () => castVote(opt.name, pollData.round);
+			optionsContainer.appendChild(button);
+		    });
+		} else if (pollData.status === 'results') {
+		    statusDiv.textContent = `Rodada ${pollData.round} encerrada. Aguardando o início da próxima rodada.`;
+		}
+	    });
+	}
+
+	function renderWinnerView(pollData) {
+	    showView('winner');
+	    document.getElementById('winner-name').textContent = pollData.winner;
+	}
+
+	// --- Ações (Admin e Votante) ---
+
+	async function createPoll() {
+	    const question = document.getElementById('poll-question').value.trim();
+	    const optionsText = document.getElementById('poll-options').value.trim();
+
+	    if (!question || !optionsText) {
+		alert('Por favor, preencha a pergunta e as opções.');
+		return;
+	    }
+
+	    const options = optionsText.split('\n').map(opt => opt.trim()).filter(Boolean);
+	    if (options.length < 2) {
+		alert('São necessárias pelo menos duas opções.');
+		return;
+	    }
+
+	    try {
+		const pollData = {
+		    question,
+		    options: options.map(name => ({ name, active: true })),
+		    round: 1,
+		    status: 'pending', // pending, voting, results, finished
+		    adminId: currentUser.uid,
+		    createdAt: new Date(),
+		    results: {},
+		    winner: null,
+		    lastEliminated: null
+		};
+
+		const pollRef = await addDoc(collection(db, 'polls'), pollData);
+		currentPollId = pollRef.id;
+
+		localStorage.setItem(`admin_${currentPollId}`, currentUser.uid);
+		window.history.pushState({}, '', `?pollId=${currentPollId}`);
+		loadPoll(currentPollId);
+
+	    } catch (error) {
+		console.error("Erro ao criar votação:", error);
+		alert('Ocorreu um erro ao criar a votação.');
+	    }
+	}
+
+	async function startRound() {
+	    const pollRef = doc(db, 'polls', currentPollId);
+	    const pollDoc = await getDoc(pollRef);
+	    const pollData = pollDoc.data();
+
+	    const nextRound = pollData.status === 'pending' ? 1 : pollData.round + 1;
+
+	    await setDoc(pollRef, { 
+		status: 'voting',
+		round: nextRound
+	    }, { merge: true });
+	}
+
+	async function endRound() {
+	    const pollRef = doc(db, "polls", currentPollId);
+	    const pollSnap = await getDoc(pollRef);
+	    let pollData = pollSnap.data();
+
+	    const votesPath = `polls/${currentPollId}/votes_round_${pollData.round}`;
+	    const votesQuery = query(collection(db, votesPath));
+	    const votesSnapshot = await getDocs(votesQuery);
+
+	    const voteCounts = {};
+	    pollData.options.filter(o => o.active).forEach(o => voteCounts[o.name] = 0);
+
+	    let totalVotes = 0;
+	    votesSnapshot.forEach(doc => {
+		const vote = doc.data().option;
+		if (voteCounts.hasOwnProperty(vote)) {
+		    voteCounts[vote]++;
+		    totalVotes++;
+		}
+	    });
+
+	    // Salva os resultados da rodada
+	    const resultsForRound = { ...pollData.results, [pollData.round]: voteCounts };
+
+	    // Verifica se há um vencedor por maioria absoluta
+	    const activeOptions = pollData.options.filter(opt => opt.active);
+	    for (const option of activeOptions) {
+		if (voteCounts[option.name] > totalVotes / 2) {
+		    await setDoc(pollRef, {
+			status: 'finished',
+			winner: option.name,
+			results: resultsForRound
+		    }, { merge: true });
+		    return;
+		}
+	    }
+
+	    // Se restam apenas 2 opções e não houve maioria, o mais votado vence
+	    if (activeOptions.length === 2) {
+		const [optA, optB] = activeOptions;
+		const winnerName = voteCounts[optA.name] >= voteCounts[optB.name] ? optA.name : optB.name;
+		 await setDoc(pollRef, {
+			status: 'finished',
+			winner: winnerName,
+			results: resultsForRound
+		    }, { merge: true });
+		    return;
+	    }
+
+	    // Encontra a opção menos votada para eliminar
+	    let minVotes = Infinity;
+	    let leastVotedOptions = [];
+
+	    for (const optionName in voteCounts) {
+		if (voteCounts[optionName] < minVotes) {
+		    minVotes = voteCounts[optionName];
+		    leastVotedOptions = [optionName];
+		} else if (voteCounts[optionName] === minVotes) {
+		    leastVotedOptions.push(optionName);
+		}
+	    }
+
+	    const optionToEliminate = leastVotedOptions[0]; // Em caso de empate, elimina o primeiro da lista
+	    const newOptions = pollData.options.map(opt => {
+		if (opt.name === optionToEliminate) {
+		    return { ...opt, active: false };
+		}
+		return opt;
+	    });
+
+	    // Se todas as opções restantes forem eliminadas, declara o último como vencedor
+	     const remainingActive = newOptions.filter(opt => opt.active);
+	    if (remainingActive.length <= 1) {
+		 await setDoc(pollRef, {
+		    status: 'finished',
+		    winner: remainingActive[0]?.name || "Ninguém",
+		    options: newOptions,
+		    results: resultsForRound,
+		}, { merge: true });
+		return;
+	    }
+
+	    await setDoc(pollRef, {
+		status: 'results',
+		options: newOptions,
+		lastEliminated: optionToEliminate,
+		results: resultsForRound,
+	    }, { merge: true });
+	}
+
+	async function castVote(optionName, round) {
+	    const votePath = `polls/${currentPollId}/votes_round_${round}`;
+	    const voteRef = doc(db, votePath, currentUser.uid);
+	    try {
+		await setDoc(voteRef, { option: optionName, timestamp: new Date() });
+	    } catch (error) {
+		console.error("Erro ao registrar voto:", error);
+		alert("Não foi possível registrar seu voto.");
+	    }
+	}
+
+	// --- Funções Auxiliares ---
+	function createButton(text, onClick) {
+	    const button = document.createElement('button');
+	    button.textContent = text;
+	    button.className = "w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors";
+	    button.onclick = onClick;
+	    return button;
+	}
+
+	function copyLinkToClipboard() {
+	    const linkInput = document.getElementById('voter-link');
+	    navigator.clipboard.writeText(linkInput.value).then(() => {
+		const feedback = document.getElementById('copy-feedback');
+		feedback.textContent = 'Copiado!';
+		setTimeout(() => feedback.textContent = '', 2000);
+	    });
+	}
+
+	// --- Event Listeners ---
+	showCreateViewBtn.addEventListener('click', () => showView('create'));
+	backToHomeBtn.addEventListener('click', () => showView('home'));
+	createPollBtn.addEventListener('click', createPoll);
+	copyLinkBtn.addEventListener('click', copyLinkToClipboard);
+
+    </script>
+</body>
+</html>
