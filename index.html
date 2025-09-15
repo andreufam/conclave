@@ -111,16 +111,16 @@
     <!-- Módulo Firebase -->
     <script type="module">
         // Cole aqui a configuração do seu projeto Firebase
-       const firebaseConfig = {
+const firebaseConfig = {
   apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
   authDomain: "conclave-mdm.firebaseapp.com",
   projectId: "conclave-mdm",
   storageBucket: "conclave-mdm.firebasestorage.app",
   messagingSenderId: "346904370830",                                                                          appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
-}; 
+};
         // Importações do Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, doc, getDoc, setDoc, addDoc, collection, onSnapshot, query, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, addDoc, collection, onSnapshot, query, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
         // Inicializa o Firebase
@@ -208,6 +208,9 @@
                 } else {
                     renderVoterView(pollData);
                 }
+            }, (error) => {
+                console.error("Erro no listener da votação:", error);
+                alert("Ocorreu um erro ao carregar os dados da votação. Verifique o console para mais detalhes.");
             });
         }
         
@@ -254,10 +257,16 @@
                     adminControls.appendChild(button);
                     break;
                 case 'voting':
+                    adminStatus.innerHTML = `Rodada ${pollData.round}. Votação em andamento. <span id="vote-counter" class="font-semibold">(0 votos recebidos)</span>`;
                     const votesPath = collection(db, `polls/${currentPollId}/votes_round_${pollData.round}`);
                     voteCountUnsubscribe = onSnapshot(votesPath, (snapshot) => {
                         const voteCount = snapshot.size;
-                        adminStatus.textContent = `Rodada ${pollData.round}. Votação em andamento. (${voteCount} votos recebidos)`;
+                        const currentCounter = document.getElementById('vote-counter');
+                        if (currentCounter) {
+                           currentCounter.textContent = `(${voteCount} ${voteCount === 1 ? 'voto recebido' : 'votos recebidos'})`;
+                        }
+                    }, (error) => {
+                        console.error("Erro no listener de contagem de votos:", error);
                     });
                     button = createButton('Encerrar Rodada e Contar Votos', endRound);
                     adminControls.appendChild(button);
@@ -363,8 +372,10 @@
             const resultsContainer = document.getElementById('final-results-container');
             const resultsList = document.getElementById('final-results-list');
             resultsList.innerHTML = '';
-
-            const finalResults = pollData.results[pollData.round];
+            
+            const allRounds = pollData.results ? Object.keys(pollData.results).map(Number) : [];
+            const lastRoundNumber = allRounds.length > 0 ? Math.max(...allRounds) : null;
+            const finalResults = lastRoundNumber ? pollData.results[lastRoundNumber] : null;
             
             if (finalResults) {
                 resultsContainer.classList.remove('hidden');
@@ -428,28 +439,30 @@
         async function startRound() {
             const pollRef = doc(db, 'polls', currentPollId);
             const pollDoc = await getDoc(pollRef);
+            if (!pollDoc.exists()) return;
             const pollData = pollDoc.data();
             
             const activeOptions = pollData.options.filter(opt => opt.active);
             if (activeOptions.length < 2) {
-                await setDoc(pollRef, {
+                await updateDoc(pollRef, {
                     status: 'finished',
                     winner: activeOptions[0]?.name || "Ninguém"
-                }, { merge: true });
+                });
                 return;
             }
             
             const nextRound = pollData.status === 'pending' ? 1 : pollData.round + 1;
 
-            await setDoc(pollRef, { 
+            await updateDoc(pollRef, { 
                 status: 'voting',
                 round: nextRound
-            }, { merge: true });
+            });
         }
 
         async function endRound() {
             const pollRef = doc(db, "polls", currentPollId);
             const pollSnap = await getDoc(pollRef);
+            if (!pollSnap.exists()) return;
             let pollData = pollSnap.data();
             
             const votesPath = `polls/${currentPollId}/votes_round_${pollData.round}`;
@@ -471,47 +484,68 @@
             const resultsForRound = { ...pollData.results, [pollData.round]: voteCounts };
             const activeOptions = pollData.options.filter(opt => opt.active);
 
+            // Case 1: Check for an absolute majority winner. This is the highest priority.
             for (const option of activeOptions) {
                 if (totalVotes > 0 && voteCounts[option.name] > totalVotes / 2) {
-                    await setDoc(pollRef, { status: 'finished', winner: option.name, results: resultsForRound }, { merge: true });
-                    return;
+                    await updateDoc(pollRef, { status: 'finished', winner: option.name, results: resultsForRound });
+                    return; // Winner found, stop everything.
                 }
             }
             
+            // Case 2: Handle the final round with exactly two options.
             if (activeOptions.length === 2) {
                 const [optA, optB] = activeOptions;
-                const winnerName = voteCounts[optA.name] >= voteCounts[optB.name] ? optA.name : optB.name;
-                 await setDoc(pollRef, { status: 'finished', winner: winnerName, results: resultsForRound }, { merge: true });
-                    return;
+                // If it's a tie, defer to admin.
+                if (voteCounts[optA.name] === voteCounts[optB.name]) {
+                    await updateDoc(pollRef, { 
+                        status: 'results', 
+                        lastEliminated: null, // No one is auto-eliminated
+                        results: resultsForRound 
+                    });
+                } else {
+                    // If not a tie, the one with more votes is the winner.
+                    const winnerName = voteCounts[optA.name] > voteCounts[optB.name] ? optA.name : optB.name;
+                    await updateDoc(pollRef, { status: 'finished', winner: winnerName, results: resultsForRound });
+                }
+                return; // Stop after handling the two-option scenario.
             }
 
-            let minVotes = Infinity;
-            let leastVotedOptions = [];
-            activeOptions.forEach(opt => {
-                const count = voteCounts[opt.name];
-                 if (count < minVotes) {
-                    minVotes = count;
-                    leastVotedOptions = [opt.name];
-                } else if (count === minVotes) {
-                    leastVotedOptions.push(opt.name);
-                }
-            });
+            // Case 3: Standard elimination for more than two options.
+            if (activeOptions.length > 2) {
+                let minVotes = Infinity;
+                let leastVotedOptions = [];
+                activeOptions.forEach(opt => {
+                    const count = voteCounts[opt.name];
+                    if (count < minVotes) {
+                        minVotes = count;
+                        leastVotedOptions = [opt.name];
+                    } else if (count === minVotes) {
+                        leastVotedOptions.push(opt.name);
+                    }
+                });
 
-            const optionToEliminate = leastVotedOptions[0]; 
-            const newOptions = pollData.options.map(opt => {
-                if (opt.name === optionToEliminate) {
-                    return { ...opt, active: false };
+                // Auto-eliminate the first of the least-voted options
+                const optionToEliminate = leastVotedOptions[0]; 
+                const newOptions = pollData.options.map(opt => {
+                    if (opt.name === optionToEliminate) {
+                        return { ...opt, active: false };
+                    }
+                    return opt;
+                });
+                
+                // Check if this elimination results in a winner
+                const remainingActive = newOptions.filter(opt => opt.active);
+                if (remainingActive.length === 1) {
+                    await updateDoc(pollRef, { status: 'finished', winner: remainingActive[0].name, options: newOptions, results: resultsForRound });
+                } else {
+                     // Otherwise, just show the results for the admin to confirm and start next round
+                    await updateDoc(pollRef, { status: 'results', options: newOptions, lastEliminated: optionToEliminate, results: resultsForRound });
                 }
-                return opt;
-            });
-            
-             const remainingActive = newOptions.filter(opt => opt.active);
-            if (remainingActive.length === 1) {
-                 await setDoc(pollRef, { status: 'finished', winner: remainingActive[0].name, options: newOptions, results: resultsForRound, }, { merge: true });
                 return;
             }
-
-            await setDoc(pollRef, { status: 'results', options: newOptions, lastEliminated: optionToEliminate, results: resultsForRound, }, { merge: true });
+            
+            // Fallback for any other case (e.g. 0 or 1 options somehow)
+            await updateDoc(pollRef, { status: 'results', results: resultsForRound });
         }
 
         async function toggleOptionStatus(optionNameToToggle) {
@@ -530,7 +564,7 @@
                     return opt;
                 });
                 
-                await setDoc(pollRef, { options: newOptions }, { merge: true });
+                await updateDoc(pollRef, { options: newOptions });
 
             } catch (error) {
                 console.error("Erro ao alterar status da opção:", error);
@@ -576,3 +610,4 @@
     </script>
 </body>
 </html>
+
