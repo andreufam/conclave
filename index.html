@@ -92,6 +92,10 @@
             <h2 class="text-xl font-semibold mb-2">Votação Encerrada!</h2>
             <p class="text-gray-600 mb-4">O vencedor é:</p>
             <div id="winner-name" class="text-4xl font-bold text-indigo-600 p-6 bg-yellow-200 rounded-lg inline-block"></div>
+            <div id="final-results-container" class="hidden mt-6 text-left">
+                 <h3 class="text-lg font-semibold text-center mb-3 border-b pb-2">Resultado Final</h3>
+                 <div id="final-results-list" class="space-y-2"></div>
+            </div>
         </div>
 
          <!-- Carregando... -->
@@ -107,14 +111,13 @@
     <!-- Módulo Firebase -->
     <script type="module">
         // Cole aqui a configuração do seu projeto Firebase
-        const firebaseConfig = {
+       const firebaseConfig = {
   apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
   authDomain: "conclave-mdm.firebaseapp.com",
   projectId: "conclave-mdm",
   storageBucket: "conclave-mdm.firebasestorage.app",
   messagingSenderId: "346904370830",                                                                          appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
-};
-
+}; 
         // Importações do Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getFirestore, doc, getDoc, setDoc, addDoc, collection, onSnapshot, query, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -129,6 +132,7 @@
         let currentPollId = null;
         let currentUser = null;
         let pollUnsubscribe = null; // Para desligar o listener do onSnapshot
+        let voteCountUnsubscribe = null; // Listener para a contagem de votos
         let selectedOption = null;
 
         // --- Elementos do DOM ---
@@ -181,7 +185,11 @@
             showView('loading');
             const pollRef = doc(db, 'polls', pollId);
 
-            if (pollUnsubscribe) pollUnsubscribe(); // Cancela listener anterior
+            if (pollUnsubscribe) pollUnsubscribe();
+            if (voteCountUnsubscribe) {
+                voteCountUnsubscribe();
+                voteCountUnsubscribe = null;
+            }
 
             pollUnsubscribe = onSnapshot(pollRef, (pollDoc) => {
                 if (!pollDoc.exists()) {
@@ -216,17 +224,27 @@
             const optionsContainer = document.getElementById('admin-options-container');
             const adminControls = document.getElementById('admin-controls');
 
+            if (voteCountUnsubscribe) {
+                voteCountUnsubscribe();
+                voteCountUnsubscribe = null;
+            }
+
             optionsContainer.innerHTML = '';
+            const roundResults = pollData.results?.[pollData.round] || {};
             
-            // Renderiza as opções
             pollData.options.forEach(opt => {
                 const div = document.createElement('div');
                 div.className = `option-item p-3 border rounded-lg flex justify-between items-center ${!opt.active ? 'eliminated' : 'bg-gray-50'}`;
-                div.innerHTML = `<span>${opt.name}</span> <span class="font-semibold text-gray-500">${pollData.results?.[pollData.round]?.[opt.name] || 0} votos</span>`;
+                div.innerHTML = `<span>${opt.name}</span> <span class="font-semibold text-gray-500">${roundResults[opt.name] || 0} votos</span>`;
+
+                if (pollData.status === 'results') {
+                    div.classList.add('cursor-pointer', 'hover:bg-gray-200');
+                    div.onclick = () => toggleOptionStatus(opt.name);
+                }
+
                 optionsContainer.appendChild(div);
             });
 
-            // Atualiza status e controles
             adminControls.innerHTML = '';
             let button;
             switch(pollData.status) {
@@ -236,13 +254,17 @@
                     adminControls.appendChild(button);
                     break;
                 case 'voting':
-                    adminStatus.textContent = `Rodada ${pollData.round}. Votação em andamento.`;
+                    const votesPath = collection(db, `polls/${currentPollId}/votes_round_${pollData.round}`);
+                    voteCountUnsubscribe = onSnapshot(votesPath, (snapshot) => {
+                        const voteCount = snapshot.size;
+                        adminStatus.textContent = `Rodada ${pollData.round}. Votação em andamento. (${voteCount} votos recebidos)`;
+                    });
                     button = createButton('Encerrar Rodada e Contar Votos', endRound);
                     adminControls.appendChild(button);
                     break;
                 case 'results':
-                    adminStatus.innerHTML = `Rodada ${pollData.round} encerrada. A opção <strong>"${pollData.lastEliminated}"</strong> foi eliminada. <br> Próxima rodada iniciará com as opções restantes.`;
-                    button = createButton(`Iniciar Rodada ${pollData.round + 1}`, startRound);
+                    adminStatus.innerHTML = `Rodada ${pollData.round} encerrada. Clique nas opções para eliminar ou reativar antes de iniciar a próxima rodada.`;
+                    button = createButton(`Iniciar Próxima Rodada`, startRound);
                     adminControls.appendChild(button);
                     break;
             }
@@ -258,7 +280,6 @@
             const resultsList = document.getElementById('round-results-list');
             const resultsTitle = resultsContainer.querySelector('h3');
 
-            // Clear previous state
             optionsContainer.innerHTML = '';
             controlsContainer.innerHTML = '';
             resultsContainer.classList.add('hidden');
@@ -316,13 +337,18 @@
                         resultsContainer.classList.remove('hidden');
                         resultsTitle.textContent = `Resultado da Rodada ${pollData.round}`;
                         
+                        const optionsStatus = pollData.options.reduce((acc, opt) => {
+                            acc[opt.name] = opt.active;
+                            return acc;
+                        }, {});
+
                         const sortedOptions = Object.keys(roundResults).sort((a, b) => roundResults[b] - roundResults[a]);
 
                         sortedOptions.forEach(optName => {
-                            const isEliminated = optName === pollData.lastEliminated;
+                            const isActive = optionsStatus[optName];
                             const resultDiv = document.createElement('div');
-                            resultDiv.className = `flex justify-between items-center p-2 rounded ${isEliminated ? 'bg-red-100 text-red-800' : 'bg-gray-50'}`;
-                            resultDiv.innerHTML = `<span>${optName} ${isEliminated ? '(Eliminado)' : ''}</span> <span class="font-semibold">${roundResults[optName]} votos</span>`;
+                            resultDiv.className = `flex justify-between items-center p-2 rounded ${!isActive ? 'bg-red-100 text-red-800 line-through' : 'bg-gray-50'}`;
+                            resultDiv.innerHTML = `<span>${optName} ${!isActive ? '(Eliminado)' : ''}</span> <span class="font-semibold">${roundResults[optName]} votos</span>`;
                             resultsList.appendChild(resultDiv);
                         });
                     }
@@ -333,6 +359,27 @@
         function renderWinnerView(pollData) {
             showView('winner');
             document.getElementById('winner-name').textContent = pollData.winner;
+
+            const resultsContainer = document.getElementById('final-results-container');
+            const resultsList = document.getElementById('final-results-list');
+            resultsList.innerHTML = '';
+
+            const finalResults = pollData.results[pollData.round];
+            
+            if (finalResults) {
+                resultsContainer.classList.remove('hidden');
+                const sortedOptions = Object.keys(finalResults).sort((a, b) => finalResults[b] - finalResults[a]);
+
+                sortedOptions.forEach(optName => {
+                    const isWinner = optName === pollData.winner;
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = `flex justify-between items-center p-2 rounded ${isWinner ? 'bg-green-100 font-bold text-green-800' : 'bg-gray-50'}`;
+                    resultDiv.innerHTML = `<span>${optName}</span> <span class="font-semibold">${finalResults[optName]} votos</span>`;
+                    resultsList.appendChild(resultDiv);
+                });
+            } else {
+                 resultsContainer.classList.add('hidden');
+            }
         }
 
         // --- Ações (Admin e Votante) ---
@@ -383,6 +430,15 @@
             const pollDoc = await getDoc(pollRef);
             const pollData = pollDoc.data();
             
+            const activeOptions = pollData.options.filter(opt => opt.active);
+            if (activeOptions.length < 2) {
+                await setDoc(pollRef, {
+                    status: 'finished',
+                    winner: activeOptions[0]?.name || "Ninguém"
+                }, { merge: true });
+                return;
+            }
+            
             const nextRound = pollData.status === 'pending' ? 1 : pollData.round + 1;
 
             await setDoc(pollRef, { 
@@ -412,38 +468,25 @@
                 }
             });
 
-            // Salva os resultados da rodada
             const resultsForRound = { ...pollData.results, [pollData.round]: voteCounts };
-
-            // Verifica se há um vencedor por maioria absoluta
             const activeOptions = pollData.options.filter(opt => opt.active);
+
             for (const option of activeOptions) {
                 if (totalVotes > 0 && voteCounts[option.name] > totalVotes / 2) {
-                    await setDoc(pollRef, {
-                        status: 'finished',
-                        winner: option.name,
-                        results: resultsForRound
-                    }, { merge: true });
+                    await setDoc(pollRef, { status: 'finished', winner: option.name, results: resultsForRound }, { merge: true });
                     return;
                 }
             }
             
-            // Se restam apenas 2 opções e não houve maioria, o mais votado vence
             if (activeOptions.length === 2) {
                 const [optA, optB] = activeOptions;
                 const winnerName = voteCounts[optA.name] >= voteCounts[optB.name] ? optA.name : optB.name;
-                 await setDoc(pollRef, {
-                        status: 'finished',
-                        winner: winnerName,
-                        results: resultsForRound
-                    }, { merge: true });
+                 await setDoc(pollRef, { status: 'finished', winner: winnerName, results: resultsForRound }, { merge: true });
                     return;
             }
 
-            // Encontra a opção menos votada para eliminar
             let minVotes = Infinity;
             let leastVotedOptions = [];
-
             activeOptions.forEach(opt => {
                 const count = voteCounts[opt.name];
                  if (count < minVotes) {
@@ -454,7 +497,7 @@
                 }
             });
 
-            const optionToEliminate = leastVotedOptions[0]; // Em caso de empate, elimina o primeiro da lista
+            const optionToEliminate = leastVotedOptions[0]; 
             const newOptions = pollData.options.map(opt => {
                 if (opt.name === optionToEliminate) {
                     return { ...opt, active: false };
@@ -464,21 +507,35 @@
             
              const remainingActive = newOptions.filter(opt => opt.active);
             if (remainingActive.length === 1) {
-                 await setDoc(pollRef, {
-                    status: 'finished',
-                    winner: remainingActive[0].name,
-                    options: newOptions,
-                    results: resultsForRound,
-                }, { merge: true });
+                 await setDoc(pollRef, { status: 'finished', winner: remainingActive[0].name, options: newOptions, results: resultsForRound, }, { merge: true });
                 return;
             }
 
-            await setDoc(pollRef, {
-                status: 'results',
-                options: newOptions,
-                lastEliminated: optionToEliminate,
-                results: resultsForRound,
-            }, { merge: true });
+            await setDoc(pollRef, { status: 'results', options: newOptions, lastEliminated: optionToEliminate, results: resultsForRound, }, { merge: true });
+        }
+
+        async function toggleOptionStatus(optionNameToToggle) {
+            const pollRef = doc(db, 'polls', currentPollId);
+            try {
+                const pollDoc = await getDoc(pollRef);
+                if (!pollDoc.exists()) return;
+
+                const pollData = pollDoc.data();
+                if (pollData.status !== 'results') return;
+
+                const newOptions = pollData.options.map(opt => {
+                    if (opt.name === optionNameToToggle) {
+                        return { ...opt, active: !opt.active };
+                    }
+                    return opt;
+                });
+                
+                await setDoc(pollRef, { options: newOptions }, { merge: true });
+
+            } catch (error) {
+                console.error("Erro ao alterar status da opção:", error);
+                alert("Ocorreu um erro.");
+            }
         }
         
         async function castVote(optionName, round) {
