@@ -11,6 +11,12 @@
         .hidden { display: none; }
         .option-item { transition: all 0.3s ease; }
         .option-item.eliminated { background-color: #fecaca; color: #991b1b; text-decoration: line-through; }
+        .option-btn.selected {
+            border-color: #6366f1;
+            background-color: #eef2ff;
+            font-weight: 500;
+            box-shadow: 0 0 0 2px #a5b4fc;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
@@ -19,8 +25,8 @@
 
         <!-- Tela Inicial: Criar ou Entrar -->
         <div id="home-view">
-            <h1 class="text-3xl font-bold text-center text-gray-900">Conclave Mdmucho Texto</h1>
-            <p class="text-center text-gray-600 mt-2 mb-8">Defina as opções para gerar uma nova votação.</p>
+            <h1 class="text-3xl font-bold text-center text-gray-900">Votação por Rodadas</h1>
+            <p class="text-center text-gray-600 mt-2 mb-8">Crie uma votação onde a opção menos votada é eliminada a cada rodada, até um vencedor ser decidido por maioria absoluta.</p>
             <div class="space-y-4">
                 <button id="show-create-view-btn" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors">
                     Criar Nova Votação
@@ -74,6 +80,11 @@
             <h2 id="voter-poll-question" class="text-2xl font-bold text-center mb-2"></h2>
             <div id="voter-status" class="text-center p-4 rounded-lg bg-indigo-50 text-indigo-800 mb-6"></div>
             <div id="voter-options-container" class="space-y-3"></div>
+            <div id="voter-controls" class="mt-6"></div>
+            <div id="round-results-container" class="hidden mt-6">
+                 <h3 class="text-lg font-semibold text-center mb-3 border-b pb-2">Resultado da Rodada</h3>
+                 <div id="round-results-list" class="space-y-2"></div>
+            </div>
         </div>
 
         <!-- Tela de Vencedor -->
@@ -95,365 +106,415 @@
 
     <!-- Módulo Firebase -->
     <script type="module">
-	    // Cole aqui a configuração do seu projeto Firebase
-	    const firebaseConfig = {
+        // Cole aqui a configuração do seu projeto Firebase
+        const firebaseConfig = {
   apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
   authDomain: "conclave-mdm.firebaseapp.com",
   projectId: "conclave-mdm",
   storageBucket: "conclave-mdm.firebasestorage.app",
-  messagingSenderId: "346904370830",
-  appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
+  messagingSenderId: "346904370830",                                                                          appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
 };
 
-	// Importações do Firebase
-	import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-	import { getFirestore, doc, getDoc, setDoc, addDoc, collection, onSnapshot, query, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-	import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        // Importações do Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, addDoc, collection, onSnapshot, query, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-	// Inicializa o Firebase
-	const app = initializeApp(firebaseConfig);
-	const db = getFirestore(app);
-	const auth = getAuth(app);
+        // Inicializa o Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
 
-	// --- Variáveis de Estado ---
-	let currentPollId = null;
-	let currentUser = null;
-	let pollUnsubscribe = null; // Para desligar o listener do onSnapshot
+        // --- Variáveis de Estado ---
+        let currentPollId = null;
+        let currentUser = null;
+        let pollUnsubscribe = null; // Para desligar o listener do onSnapshot
+        let selectedOption = null;
 
-	// --- Elementos do DOM ---
-	const views = {
-	    home: document.getElementById('home-view'),
-	    create: document.getElementById('create-view'),
-	    admin: document.getElementById('admin-view'),
-	    voter: document.getElementById('voter-view'),
-	    winner: document.getElementById('winner-view'),
-	    loading: document.getElementById('loading-view')
-	};
-	const showCreateViewBtn = document.getElementById('show-create-view-btn');
-	const backToHomeBtn = document.getElementById('back-to-home-btn');
-	const createPollBtn = document.getElementById('create-poll-btn');
-	const copyLinkBtn = document.getElementById('copy-link-btn');
+        // --- Elementos do DOM ---
+        const views = {
+            home: document.getElementById('home-view'),
+            create: document.getElementById('create-view'),
+            admin: document.getElementById('admin-view'),
+            voter: document.getElementById('voter-view'),
+            winner: document.getElementById('winner-view'),
+            loading: document.getElementById('loading-view')
+        };
+        const showCreateViewBtn = document.getElementById('show-create-view-btn');
+        const backToHomeBtn = document.getElementById('back-to-home-btn');
+        const createPollBtn = document.getElementById('create-poll-btn');
+        const copyLinkBtn = document.getElementById('copy-link-btn');
 
-	// --- Funções de UI ---
-	const showView = (viewName) => {
-	    Object.values(views).forEach(view => view.classList.add('hidden'));
-	    if (views[viewName]) {
-		views[viewName].classList.remove('hidden');
-	    }
-	};
+        // --- Funções de UI ---
+        const showView = (viewName) => {
+            Object.values(views).forEach(view => view.classList.add('hidden'));
+            if (views[viewName]) {
+                views[viewName].classList.remove('hidden');
+            }
+        };
 
-	// --- Lógica Principal ---
-	window.onload = () => {
-	    signInAnonymously(auth).catch(error => console.error("Erro na autenticação anônima:", error));
+        // --- Lógica Principal ---
+        window.onload = () => {
+            signInAnonymously(auth).catch(error => console.error("Erro na autenticação anônima:", error));
+            
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUser = user;
+                    handleUrlChanges();
+                }
+            });
+        };
 
-	    onAuthStateChanged(auth, (user) => {
-		if (user) {
-		    currentUser = user;
-		    handleUrlChanges();
-		}
-	    });
-	};
+        const handleUrlChanges = () => {
+            const params = new URLSearchParams(window.location.search);
+            const pollId = params.get('pollId');
+            
+            if (pollId) {
+                currentPollId = pollId;
+                loadPoll(pollId);
+            } else {
+                showView('home');
+            }
+        };
+        
+        async function loadPoll(pollId) {
+            showView('loading');
+            const pollRef = doc(db, 'polls', pollId);
 
-	const handleUrlChanges = () => {
-	    const params = new URLSearchParams(window.location.search);
-	    const pollId = params.get('pollId');
+            if (pollUnsubscribe) pollUnsubscribe(); // Cancela listener anterior
 
-	    if (pollId) {
-		currentPollId = pollId;
-		loadPoll(pollId);
-	    } else {
-		showView('home');
-	    }
-	};
+            pollUnsubscribe = onSnapshot(pollRef, (pollDoc) => {
+                if (!pollDoc.exists()) {
+                    alert('Votação não encontrada!');
+                    window.location.search = '';
+                    return;
+                }
+                
+                const pollData = pollDoc.data();
+                const isAdmin = localStorage.getItem(`admin_${pollId}`) === currentUser.uid;
 
-	async function loadPoll(pollId) {
-	    showView('loading');
-	    const pollRef = doc(db, 'polls', pollId);
+                if (pollData.status === 'finished') {
+                    renderWinnerView(pollData);
+                } else if (isAdmin) {
+                    renderAdminView(pollData);
+                } else {
+                    renderVoterView(pollData);
+                }
+            });
+        }
+        
+        // --- Funções de Renderização (Views) ---
 
-	    if (pollUnsubscribe) pollUnsubscribe(); // Cancela listener anterior
+        function renderAdminView(pollData) {
+            showView('admin');
+            document.getElementById('admin-poll-question').textContent = pollData.question;
+            
+            const voterLinkInput = document.getElementById('voter-link');
+            voterLinkInput.value = `${window.location.origin}${window.location.pathname}?pollId=${currentPollId}`;
+            
+            const adminStatus = document.getElementById('admin-status');
+            const optionsContainer = document.getElementById('admin-options-container');
+            const adminControls = document.getElementById('admin-controls');
 
-	    pollUnsubscribe = onSnapshot(pollRef, (pollDoc) => {
-		if (!pollDoc.exists()) {
-		    alert('Votação não encontrada!');
-		    window.location.search = '';
-		    return;
-		}
+            optionsContainer.innerHTML = '';
+            
+            // Renderiza as opções
+            pollData.options.forEach(opt => {
+                const div = document.createElement('div');
+                div.className = `option-item p-3 border rounded-lg flex justify-between items-center ${!opt.active ? 'eliminated' : 'bg-gray-50'}`;
+                div.innerHTML = `<span>${opt.name}</span> <span class="font-semibold text-gray-500">${pollData.results?.[pollData.round]?.[opt.name] || 0} votos</span>`;
+                optionsContainer.appendChild(div);
+            });
 
-		const pollData = pollDoc.data();
-		const isAdmin = localStorage.getItem(`admin_${pollId}`) === currentUser.uid;
+            // Atualiza status e controles
+            adminControls.innerHTML = '';
+            let button;
+            switch(pollData.status) {
+                case 'pending':
+                    adminStatus.textContent = `Rodada ${pollData.round}. A votação ainda não começou.`;
+                    button = createButton('Iniciar Rodada 1', startRound);
+                    adminControls.appendChild(button);
+                    break;
+                case 'voting':
+                    adminStatus.textContent = `Rodada ${pollData.round}. Votação em andamento.`;
+                    button = createButton('Encerrar Rodada e Contar Votos', endRound);
+                    adminControls.appendChild(button);
+                    break;
+                case 'results':
+                    adminStatus.innerHTML = `Rodada ${pollData.round} encerrada. A opção <strong>"${pollData.lastEliminated}"</strong> foi eliminada. <br> Próxima rodada iniciará com as opções restantes.`;
+                    button = createButton(`Iniciar Rodada ${pollData.round + 1}`, startRound);
+                    adminControls.appendChild(button);
+                    break;
+            }
+        }
+        
+        function renderVoterView(pollData) {
+            showView('voter');
+            document.getElementById('voter-poll-question').textContent = pollData.question;
+            const statusDiv = document.getElementById('voter-status');
+            const optionsContainer = document.getElementById('voter-options-container');
+            const controlsContainer = document.getElementById('voter-controls');
+            const resultsContainer = document.getElementById('round-results-container');
+            const resultsList = document.getElementById('round-results-list');
+            const resultsTitle = resultsContainer.querySelector('h3');
 
-		if (pollData.status === 'finished') {
-		    renderWinnerView(pollData);
-		} else if (isAdmin) {
-		    renderAdminView(pollData);
-		} else {
-		    renderVoterView(pollData);
-		}
-	    });
-	}
+            // Clear previous state
+            optionsContainer.innerHTML = '';
+            controlsContainer.innerHTML = '';
+            resultsContainer.classList.add('hidden');
+            resultsList.innerHTML = '';
+            selectedOption = null;
 
-	// --- Funções de Renderização (Views) ---
+            const userVotePath = `polls/${currentPollId}/votes_round_${pollData.round}`;
+            const userVoteRef = doc(db, userVotePath, currentUser.uid);
 
-	function renderAdminView(pollData) {
-	    showView('admin');
-	    document.getElementById('admin-poll-question').textContent = pollData.question;
+            getDoc(userVoteRef).then(voteDoc => {
+                const hasVoted = voteDoc.exists();
+                
+                if (pollData.status === 'pending') {
+                    statusDiv.textContent = 'Aguardando o administrador iniciar a votação...';
+                } else if (pollData.status === 'voting') {
+                    if (hasVoted) {
+                        statusDiv.textContent = `Seu voto foi computado! Aguardando o fim da Rodada ${pollData.round}.`;
+                    } else {
+                        statusDiv.textContent = `Rodada ${pollData.round}. Por favor, escolha uma opção e confirme seu voto:`;
+                        
+                        const submitButton = document.createElement('button');
+                        submitButton.id = 'submit-vote-btn';
+                        submitButton.textContent = 'Submeter Voto';
+                        submitButton.className = 'w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed';
+                        submitButton.disabled = true;
+                        submitButton.onclick = () => {
+                            if (selectedOption) {
+                                castVote(selectedOption, pollData.round);
+                                submitButton.disabled = true;
+                                submitButton.textContent = 'Voto enviado...';
+                            }
+                        };
+                        controlsContainer.appendChild(submitButton);
 
-	    const voterLinkInput = document.getElementById('voter-link');
-	    voterLinkInput.value = `${window.location.origin}${window.location.pathname}?pollId=${currentPollId}`;
+                        pollData.options.filter(opt => opt.active).forEach(opt => {
+                            const button = document.createElement('button');
+                            button.textContent = opt.name;
+                            button.className = 'option-btn w-full text-left bg-white p-4 border rounded-lg hover:bg-indigo-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-300';
+                            button.dataset.optionName = opt.name;
 
-	    const adminStatus = document.getElementById('admin-status');
-	    const optionsContainer = document.getElementById('admin-options-container');
-	    const adminControls = document.getElementById('admin-controls');
+                            button.onclick = () => {
+                                selectedOption = opt.name;
+                                document.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
+                                button.classList.add('selected');
+                                document.getElementById('submit-vote-btn').disabled = false;
+                            };
+                            optionsContainer.appendChild(button);
+                        });
+                    }
+                } else if (pollData.status === 'results') {
+                    statusDiv.textContent = `Rodada ${pollData.round} encerrada. Aguardando o início da próxima rodada.`;
+                    
+                    const roundResults = pollData.results[pollData.round];
+                    if (roundResults) {
+                        resultsContainer.classList.remove('hidden');
+                        resultsTitle.textContent = `Resultado da Rodada ${pollData.round}`;
+                        
+                        const sortedOptions = Object.keys(roundResults).sort((a, b) => roundResults[b] - roundResults[a]);
 
-	    optionsContainer.innerHTML = '';
+                        sortedOptions.forEach(optName => {
+                            const isEliminated = optName === pollData.lastEliminated;
+                            const resultDiv = document.createElement('div');
+                            resultDiv.className = `flex justify-between items-center p-2 rounded ${isEliminated ? 'bg-red-100 text-red-800' : 'bg-gray-50'}`;
+                            resultDiv.innerHTML = `<span>${optName} ${isEliminated ? '(Eliminado)' : ''}</span> <span class="font-semibold">${roundResults[optName]} votos</span>`;
+                            resultsList.appendChild(resultDiv);
+                        });
+                    }
+                }
+            });
+        }
 
-	    // Renderiza as opções
-	    pollData.options.forEach(opt => {
-		const div = document.createElement('div');
-		div.className = `option-item p-3 border rounded-lg flex justify-between items-center ${!opt.active ? 'eliminated' : 'bg-gray-50'}`;
-		div.innerHTML = `<span>${opt.name}</span> <span class="font-semibold text-gray-500">${pollData.results?.[pollData.round]?.[opt.name] || 0} votos</span>`;
-		optionsContainer.appendChild(div);
-	    });
+        function renderWinnerView(pollData) {
+            showView('winner');
+            document.getElementById('winner-name').textContent = pollData.winner;
+        }
 
-	    // Atualiza status e controles
-	    adminControls.innerHTML = '';
-	    let button;
-	    switch(pollData.status) {
-		case 'pending':
-		    adminStatus.textContent = `Rodada ${pollData.round}. A votação ainda não começou.`;
-		    button = createButton('Iniciar Rodada 1', startRound);
-		    adminControls.appendChild(button);
-		    break;
-		case 'voting':
-		    adminStatus.textContent = `Rodada ${pollData.round}. Votação em andamento.`;
-		    button = createButton('Encerrar Rodada e Contar Votos', endRound);
-		    adminControls.appendChild(button);
-		    break;
-		case 'results':
-		    adminStatus.textContent = `Rodada ${pollData.round} encerrada. A opção "${pollData.lastEliminated}" foi eliminada.`;
-		    button = createButton(`Iniciar Rodada ${pollData.round + 1}`, startRound);
-		    adminControls.appendChild(button);
-		    break;
-	    }
-	}
+        // --- Ações (Admin e Votante) ---
 
-	function renderVoterView(pollData) {
-	    showView('voter');
-	    document.getElementById('voter-poll-question').textContent = pollData.question;
-	    const statusDiv = document.getElementById('voter-status');
-	    const optionsContainer = document.getElementById('voter-options-container');
-	    optionsContainer.innerHTML = '';
+        async function createPoll() {
+            const question = document.getElementById('poll-question').value.trim();
+            const optionsText = document.getElementById('poll-options').value.trim();
+            
+            if (!question || !optionsText) {
+                alert('Por favor, preencha a pergunta e as opções.');
+                return;
+            }
 
-	    const userVotePath = `polls/${currentPollId}/votes_round_${pollData.round}`;
-	    const userVoteRef = doc(db, userVotePath, currentUser.uid);
+            const options = optionsText.split('\n').map(opt => opt.trim()).filter(Boolean);
+            if (options.length < 2) {
+                alert('São necessárias pelo menos duas opções.');
+                return;
+            }
 
-	    getDoc(userVoteRef).then(voteDoc => {
-		const hasVoted = voteDoc.exists();
+            try {
+                const pollData = {
+                    question,
+                    options: options.map(name => ({ name, active: true })),
+                    round: 1,
+                    status: 'pending', // pending, voting, results, finished
+                    adminId: currentUser.uid,
+                    createdAt: new Date(),
+                    results: {},
+                    winner: null,
+                    lastEliminated: null
+                };
+                
+                const pollRef = await addDoc(collection(db, 'polls'), pollData);
+                currentPollId = pollRef.id;
 
-		if (pollData.status === 'pending') {
-		    statusDiv.textContent = 'Aguardando o administrador iniciar a votação...';
-		} else if (hasVoted) {
-		    statusDiv.textContent = `Seu voto foi computado! Aguardando o fim da Rodada ${pollData.round}.`;
-		} else if (pollData.status === 'voting') {
-		    statusDiv.textContent = `Rodada ${pollData.round}. Por favor, escolha uma opção:`;
-		    pollData.options.filter(opt => opt.active).forEach(opt => {
-			const button = document.createElement('button');
-			button.textContent = opt.name;
-			button.className = 'w-full text-left bg-white p-4 border rounded-lg hover:bg-indigo-50 hover:border-indigo-500 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500';
-			button.onclick = () => castVote(opt.name, pollData.round);
-			optionsContainer.appendChild(button);
-		    });
-		} else if (pollData.status === 'results') {
-		    statusDiv.textContent = `Rodada ${pollData.round} encerrada. Aguardando o início da próxima rodada.`;
-		}
-	    });
-	}
+                localStorage.setItem(`admin_${currentPollId}`, currentUser.uid);
+                window.history.pushState({}, '', `?pollId=${currentPollId}`);
+                loadPoll(currentPollId);
 
-	function renderWinnerView(pollData) {
-	    showView('winner');
-	    document.getElementById('winner-name').textContent = pollData.winner;
-	}
+            } catch (error) {
+                console.error("Erro ao criar votação:", error);
+                alert('Ocorreu um erro ao criar a votação.');
+            }
+        }
+        
+        async function startRound() {
+            const pollRef = doc(db, 'polls', currentPollId);
+            const pollDoc = await getDoc(pollRef);
+            const pollData = pollDoc.data();
+            
+            const nextRound = pollData.status === 'pending' ? 1 : pollData.round + 1;
 
-	// --- Ações (Admin e Votante) ---
+            await setDoc(pollRef, { 
+                status: 'voting',
+                round: nextRound
+            }, { merge: true });
+        }
 
-	async function createPoll() {
-	    const question = document.getElementById('poll-question').value.trim();
-	    const optionsText = document.getElementById('poll-options').value.trim();
+        async function endRound() {
+            const pollRef = doc(db, "polls", currentPollId);
+            const pollSnap = await getDoc(pollRef);
+            let pollData = pollSnap.data();
+            
+            const votesPath = `polls/${currentPollId}/votes_round_${pollData.round}`;
+            const votesQuery = query(collection(db, votesPath));
+            const votesSnapshot = await getDocs(votesQuery);
 
-	    if (!question || !optionsText) {
-		alert('Por favor, preencha a pergunta e as opções.');
-		return;
-	    }
+            const voteCounts = {};
+            pollData.options.filter(o => o.active).forEach(o => voteCounts[o.name] = 0);
+            
+            let totalVotes = 0;
+            votesSnapshot.forEach(doc => {
+                const vote = doc.data().option;
+                if (voteCounts.hasOwnProperty(vote)) {
+                    voteCounts[vote]++;
+                    totalVotes++;
+                }
+            });
 
-	    const options = optionsText.split('\n').map(opt => opt.trim()).filter(Boolean);
-	    if (options.length < 2) {
-		alert('São necessárias pelo menos duas opções.');
-		return;
-	    }
+            // Salva os resultados da rodada
+            const resultsForRound = { ...pollData.results, [pollData.round]: voteCounts };
 
-	    try {
-		const pollData = {
-		    question,
-		    options: options.map(name => ({ name, active: true })),
-		    round: 1,
-		    status: 'pending', // pending, voting, results, finished
-		    adminId: currentUser.uid,
-		    createdAt: new Date(),
-		    results: {},
-		    winner: null,
-		    lastEliminated: null
-		};
+            // Verifica se há um vencedor por maioria absoluta
+            const activeOptions = pollData.options.filter(opt => opt.active);
+            for (const option of activeOptions) {
+                if (totalVotes > 0 && voteCounts[option.name] > totalVotes / 2) {
+                    await setDoc(pollRef, {
+                        status: 'finished',
+                        winner: option.name,
+                        results: resultsForRound
+                    }, { merge: true });
+                    return;
+                }
+            }
+            
+            // Se restam apenas 2 opções e não houve maioria, o mais votado vence
+            if (activeOptions.length === 2) {
+                const [optA, optB] = activeOptions;
+                const winnerName = voteCounts[optA.name] >= voteCounts[optB.name] ? optA.name : optB.name;
+                 await setDoc(pollRef, {
+                        status: 'finished',
+                        winner: winnerName,
+                        results: resultsForRound
+                    }, { merge: true });
+                    return;
+            }
 
-		const pollRef = await addDoc(collection(db, 'polls'), pollData);
-		currentPollId = pollRef.id;
+            // Encontra a opção menos votada para eliminar
+            let minVotes = Infinity;
+            let leastVotedOptions = [];
 
-		localStorage.setItem(`admin_${currentPollId}`, currentUser.uid);
-		window.history.pushState({}, '', `?pollId=${currentPollId}`);
-		loadPoll(currentPollId);
+            activeOptions.forEach(opt => {
+                const count = voteCounts[opt.name];
+                 if (count < minVotes) {
+                    minVotes = count;
+                    leastVotedOptions = [opt.name];
+                } else if (count === minVotes) {
+                    leastVotedOptions.push(opt.name);
+                }
+            });
 
-	    } catch (error) {
-		console.error("Erro ao criar votação:", error);
-		alert('Ocorreu um erro ao criar a votação.');
-	    }
-	}
+            const optionToEliminate = leastVotedOptions[0]; // Em caso de empate, elimina o primeiro da lista
+            const newOptions = pollData.options.map(opt => {
+                if (opt.name === optionToEliminate) {
+                    return { ...opt, active: false };
+                }
+                return opt;
+            });
+            
+             const remainingActive = newOptions.filter(opt => opt.active);
+            if (remainingActive.length === 1) {
+                 await setDoc(pollRef, {
+                    status: 'finished',
+                    winner: remainingActive[0].name,
+                    options: newOptions,
+                    results: resultsForRound,
+                }, { merge: true });
+                return;
+            }
 
-	async function startRound() {
-	    const pollRef = doc(db, 'polls', currentPollId);
-	    const pollDoc = await getDoc(pollRef);
-	    const pollData = pollDoc.data();
+            await setDoc(pollRef, {
+                status: 'results',
+                options: newOptions,
+                lastEliminated: optionToEliminate,
+                results: resultsForRound,
+            }, { merge: true });
+        }
+        
+        async function castVote(optionName, round) {
+            const votePath = `polls/${currentPollId}/votes_round_${round}`;
+            const voteRef = doc(db, votePath, currentUser.uid);
+            try {
+                await setDoc(voteRef, { option: optionName, timestamp: new Date() });
+            } catch (error) {
+                console.error("Erro ao registrar voto:", error);
+                alert("Não foi possível registrar seu voto.");
+            }
+        }
 
-	    const nextRound = pollData.status === 'pending' ? 1 : pollData.round + 1;
-
-	    await setDoc(pollRef, { 
-		status: 'voting',
-		round: nextRound
-	    }, { merge: true });
-	}
-
-	async function endRound() {
-	    const pollRef = doc(db, "polls", currentPollId);
-	    const pollSnap = await getDoc(pollRef);
-	    let pollData = pollSnap.data();
-
-	    const votesPath = `polls/${currentPollId}/votes_round_${pollData.round}`;
-	    const votesQuery = query(collection(db, votesPath));
-	    const votesSnapshot = await getDocs(votesQuery);
-
-	    const voteCounts = {};
-	    pollData.options.filter(o => o.active).forEach(o => voteCounts[o.name] = 0);
-
-	    let totalVotes = 0;
-	    votesSnapshot.forEach(doc => {
-		const vote = doc.data().option;
-		if (voteCounts.hasOwnProperty(vote)) {
-		    voteCounts[vote]++;
-		    totalVotes++;
-		}
-	    });
-
-	    // Salva os resultados da rodada
-	    const resultsForRound = { ...pollData.results, [pollData.round]: voteCounts };
-
-	    // Verifica se há um vencedor por maioria absoluta
-	    const activeOptions = pollData.options.filter(opt => opt.active);
-	    for (const option of activeOptions) {
-		if (voteCounts[option.name] > totalVotes / 2) {
-		    await setDoc(pollRef, {
-			status: 'finished',
-			winner: option.name,
-			results: resultsForRound
-		    }, { merge: true });
-		    return;
-		}
-	    }
-
-	    // Se restam apenas 2 opções e não houve maioria, o mais votado vence
-	    if (activeOptions.length === 2) {
-		const [optA, optB] = activeOptions;
-		const winnerName = voteCounts[optA.name] >= voteCounts[optB.name] ? optA.name : optB.name;
-		 await setDoc(pollRef, {
-			status: 'finished',
-			winner: winnerName,
-			results: resultsForRound
-		    }, { merge: true });
-		    return;
-	    }
-
-	    // Encontra a opção menos votada para eliminar
-	    let minVotes = Infinity;
-	    let leastVotedOptions = [];
-
-	    for (const optionName in voteCounts) {
-		if (voteCounts[optionName] < minVotes) {
-		    minVotes = voteCounts[optionName];
-		    leastVotedOptions = [optionName];
-		} else if (voteCounts[optionName] === minVotes) {
-		    leastVotedOptions.push(optionName);
-		}
-	    }
-
-	    const optionToEliminate = leastVotedOptions[0]; // Em caso de empate, elimina o primeiro da lista
-	    const newOptions = pollData.options.map(opt => {
-		if (opt.name === optionToEliminate) {
-		    return { ...opt, active: false };
-		}
-		return opt;
-	    });
-
-	    // Se todas as opções restantes forem eliminadas, declara o último como vencedor
-	     const remainingActive = newOptions.filter(opt => opt.active);
-	    if (remainingActive.length <= 1) {
-		 await setDoc(pollRef, {
-		    status: 'finished',
-		    winner: remainingActive[0]?.name || "Ninguém",
-		    options: newOptions,
-		    results: resultsForRound,
-		}, { merge: true });
-		return;
-	    }
-
-	    await setDoc(pollRef, {
-		status: 'results',
-		options: newOptions,
-		lastEliminated: optionToEliminate,
-		results: resultsForRound,
-	    }, { merge: true });
-	}
-
-	async function castVote(optionName, round) {
-	    const votePath = `polls/${currentPollId}/votes_round_${round}`;
-	    const voteRef = doc(db, votePath, currentUser.uid);
-	    try {
-		await setDoc(voteRef, { option: optionName, timestamp: new Date() });
-	    } catch (error) {
-		console.error("Erro ao registrar voto:", error);
-		alert("Não foi possível registrar seu voto.");
-	    }
-	}
-
-	// --- Funções Auxiliares ---
-	function createButton(text, onClick) {
-	    const button = document.createElement('button');
-	    button.textContent = text;
-	    button.className = "w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors";
-	    button.onclick = onClick;
-	    return button;
-	}
-
-	function copyLinkToClipboard() {
-	    const linkInput = document.getElementById('voter-link');
-	    navigator.clipboard.writeText(linkInput.value).then(() => {
-		const feedback = document.getElementById('copy-feedback');
-		feedback.textContent = 'Copiado!';
-		setTimeout(() => feedback.textContent = '', 2000);
-	    });
-	}
-
-	// --- Event Listeners ---
-	showCreateViewBtn.addEventListener('click', () => showView('create'));
-	backToHomeBtn.addEventListener('click', () => showView('home'));
-	createPollBtn.addEventListener('click', createPoll);
-	copyLinkBtn.addEventListener('click', copyLinkToClipboard);
+        // --- Funções Auxiliares ---
+        function createButton(text, onClick) {
+            const button = document.createElement('button');
+            button.textContent = text;
+            button.className = "w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors";
+            button.onclick = onClick;
+            return button;
+        }
+        
+        function copyLinkToClipboard() {
+            const linkInput = document.getElementById('voter-link');
+            navigator.clipboard.writeText(linkInput.value).then(() => {
+                const feedback = document.getElementById('copy-feedback');
+                feedback.textContent = 'Copiado!';
+                setTimeout(() => feedback.textContent = '', 2000);
+            });
+        }
+        
+        // --- Event Listeners ---
+        showCreateViewBtn.addEventListener('click', () => showView('create'));
+        backToHomeBtn.addEventListener('click', () => showView('home'));
+        createPollBtn.addEventListener('click', createPoll);
+        copyLinkBtn.addEventListener('click', copyLinkToClipboard);
 
     </script>
 </body>
