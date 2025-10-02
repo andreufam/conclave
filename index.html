@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conclave MdM</title>
+    <title>Sistema de Votação por Rodadas</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -48,12 +48,12 @@
         </div>
 
         <!-- Seção de Resultados e Admin -->
-        <div id="admin-panel" class="border-t pt-6 space-y-4" style="display: none;">
+        <div id="admin-section" class="border-t pt-6 space-y-4">
             <h2 class="text-xl font-bold text-center text-gray-800">Painel de Controle / Resultados</h2>
             <div id="resultados-container" class="bg-gray-50 p-4 rounded-lg text-center">
                 <p class="text-gray-600">Os resultados da rodada aparecerão aqui.</p>
             </div>
-            <button onclick="calculateResults()" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-300">
+            <button id="apurar-btn" onclick="calculateResults()" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-300">
                 Encerrar Rodada e Apurar Resultados
             </button>
         </div>
@@ -66,15 +66,18 @@
 
     <script>
         // --- INÍCIO DA CONFIGURAÇÃO DO FIREBASE ---
-        // COLE AQUI O OBJETO firebaseConfig QUE VOCÊ COPIOU DO SEU PROJETO
 const firebaseConfig = {
   apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
   authDomain: "conclave-mdm.firebaseapp.com",
   projectId: "conclave-mdm",
   storageBucket: "conclave-mdm.firebasestorage.app",
   messagingSenderId: "346904370830",                                                                          appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
-};
+};       
         // --- FIM DA CONFIGURAÇÃO DO FIREBASE ---
+
+        let db;
+        let opcoesRef, votosRef, configRef, rodadasRef;
+        let rodadaAtual = 1;
 
         // Validação da configuração do Firebase
         if (firebaseConfig.apiKey === "SUA_API_KEY" || firebaseConfig.projectId === "SEU_PROJECT_ID") {
@@ -86,240 +89,192 @@ const firebaseConfig = {
                         Parece que você ainda não configurou as chaves do Firebase. A aplicação não pode funcionar sem elas.
                     </p>
                     <p class="mt-2 text-gray-600 bg-yellow-100 p-4 rounded-lg">
-                        <strong>Ação necessária:</strong> Abra este arquivo HTML, encontre o objeto <code>firebaseConfig</code> e substitua os valores de exemplo ("SUA_API_KEY", "SEU_PROJECT_ID", etc.) pelas chaves reais que você copiou do seu projeto no console do Firebase.
+                        <strong>Ação necessária:</strong> Abra este arquivo HTML, encontre o objeto <code>firebaseConfig</code> e substitua os valores de exemplo pelas chaves reais do seu projeto no Firebase.
                     </p>
                 </div>
             `;
         } else {
-            // Inicializa o Firebase
             firebase.initializeApp(firebaseConfig);
-            const db = firebase.firestore();
+            db = firebase.firestore();
+            opcoesRef = db.collection('opcoes');
+            votosRef = db.collection('votos');
+            configRef = db.collection('configuracao').doc('geral');
+            rodadasRef = db.collection('rodadas'); // Nova coleção para salvar resultados
+            window.onload = loadVotingState;
+        }
 
-            // Referências para as coleções no Firestore
-            const opcoesRef = db.collection('opcoes');
-            const votosRef = db.collection('votos');
-            const configRef = db.collection('configuracao').doc('geral');
-
-            let rodadaAtual = 1;
-
-            // Função para carregar as opções ativas e o estado da votação
-            async function loadVotingState() {
-                try {
-                    const configDoc = await configRef.get();
-                    if (configDoc.exists) {
-                        rodadaAtual = configDoc.data().rodadaAtual;
-                        document.getElementById('titulo-principal').innerText = `Votação - Rodada ${rodadaAtual}`;
-                    }
-
-                    const snapshot = await opcoesRef.where('estaEliminada', '==', false).get();
-                    const container = document.getElementById('opcoes-container');
-                    container.innerHTML = ''; // Limpa o container
-
-                    if (snapshot.empty) {
-                        container.innerHTML = '<p class="text-center col-span-full p-8 text-gray-500">Nenhuma opção disponível para votação.</p>';
-                        return;
-                    }
-
-                    snapshot.forEach(doc => {
-                        const opcao = doc.data();
-                        const opcaoId = doc.id;
-                        const element = `
-                            <label for="${opcaoId}" class="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-indigo-50 transition-all">
-                                <input type="checkbox" id="${opcaoId}" value="${opcaoId}" name="opcao" class="custom-checkbox h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                <span class="font-medium text-gray-700">${opcao.nome}</span>
-                            </label>
-                        `;
-                        container.innerHTML += element;
-                    });
-                } catch (error) {
-                    console.error("Erro ao carregar opções: ", error);
-                    const container = document.getElementById('opcoes-container');
-                    container.innerHTML = `<p class="text-red-600 col-span-full text-center">Não foi possível carregar as opções de voto. Verifique se a configuração do Firebase está correta e se você tem conexão com a internet.</p>`;
+        async function loadVotingState() {
+            try {
+                const configDoc = await configRef.get();
+                if (configDoc.exists) {
+                    rodadaAtual = configDoc.data().rodadaAtual;
+                    document.getElementById('titulo-principal').innerText = `Votação - Rodada ${rodadaAtual}`;
                 }
-            }
 
-            // Função para lidar com o envio do voto
-            async function handleVote() {
-                const nomeEleitor = document.getElementById('nome').value.trim();
-                if (!nomeEleitor) {
-                    alert('Por favor, digite seu nome para votar.');
+                // **NOVO**: Restaura o painel de resultados da última rodada concluída
+                if (rodadaAtual > 1) {
+                    const rodadaAnteriorRef = rodadasRef.doc(String(rodadaAtual - 1));
+                    const doc = await rodadaAnteriorRef.get();
+                    if (doc.exists) {
+                        const dadosRodadaAnterior = doc.data();
+                        document.getElementById('resultados-container').innerHTML = dadosRodadaAnterior.resultadosHTML;
+                        
+                        // Se um vencedor foi encontrado, encerra a votação permanentemente
+                        if (dadosRodadaAnterior.status === 'vencedor_encontrado') {
+                            document.getElementById('secao-votacao').style.display = 'none';
+                            document.getElementById('admin-section').style.display = 'none';
+                            document.getElementById('status-votacao').innerText = 'A votação foi encerrada.';
+                            return; // Interrompe a execução para não carregar novas opções
+                        }
+                    }
+                }
+
+                const snapshot = await opcoesRef.where('estaEliminada', '==', false).get();
+                const container = document.getElementById('opcoes-container');
+                container.innerHTML = ''; 
+
+                if (snapshot.empty) {
+                    container.innerHTML = '<p class="text-center col-span-full p-8 text-gray-500">Nenhuma opção disponível para votação.</p>';
                     return;
                 }
 
-                const checkboxes = document.querySelectorAll('input[name="opcao"]:checked');
-                if (checkboxes.length === 0 || checkboxes.length > 3) {
-                    alert('Você deve escolher de 1 a 3 opções.');
-                    return;
-                }
-
-                const escolhas = Array.from(checkboxes).map(cb => cb.value);
-
-                try {
-                    // Verifica se o eleitor já votou nesta rodada
-                    const votoExistente = await votosRef
-                        .where('nomeEleitor', '==', nomeEleitor)
-                        .where('rodada', '==', rodadaAtual)
-                        .get();
-
-                    if (!votoExistente.empty) {
-                        alert('Você já votou nesta rodada!');
-                        return;
-                    }
-
-                    // Salva o novo voto
-                    await votosRef.add({
-                        nomeEleitor: nomeEleitor,
-                        escolhas: escolhas,
-                        rodada: rodadaAtual,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-
-                    alert('Voto registrado com sucesso!');
-                    document.getElementById('nome').value = '';
-                    checkboxes.forEach(cb => cb.checked = false);
-                    document.getElementById('secao-votacao').style.display = 'none';
-                    document.getElementById('status-votacao').innerText = 'Obrigado por votar! Aguarde os resultados.';
-
-                } catch (error) {
-                    console.error("Erro ao registrar voto: ", error);
-                    alert('Ocorreu um erro ao registrar seu voto.');
-                }
-            }
-
-            // Função para apurar os resultados (função de "admin")
-            async function calculateResults() {
-                const resultadosContainer = document.getElementById('resultados-container');
-                resultadosContainer.innerHTML = '<p>Calculando resultados...</p>';
-
-                try {
-                    const votosSnapshot = await votosRef.where('rodada', '==', rodadaAtual).get();
-                    if (votosSnapshot.empty) {
-                        resultadosContainer.innerHTML = '<p>Nenhum voto foi registrado nesta rodada.</p>';
-                        return;
-                    }
-
-                    const totalEleitores = votosSnapshot.size;
-                    const contagemVotos = {};
-
-                    votosSnapshot.forEach(doc => {
-                        const voto = doc.data();
-                        voto.escolhas.forEach(opcaoId => {
-                            contagemVotos[opcaoId] = (contagemVotos[opcaoId] || 0) + 1;
-                        });
-                    });
-                    
-                    const opcoesAtivasSnapshot = await opcoesRef.where('estaEliminada', '==', false).get();
-                    const mapaNomesOpcoes = {};
-                    opcoesAtivasSnapshot.forEach(doc => {
-                        mapaNomesOpcoes[doc.id] = doc.data().nome;
-                    });
-
-                    let vencedorEncontrado = null;
-                    let htmlResultados = `
-                        <h3 class="font-bold text-lg mb-2">Resultados da Rodada ${rodadaAtual}</h3>
-                        <p class="text-sm text-gray-600 mb-4">Total de eleitores: ${totalEleitores}</p>
-                        <ul class="text-left space-y-2">
+                snapshot.forEach(doc => {
+                    const { nome } = doc.data();
+                    const element = `
+                        <label for="${doc.id}" class="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-indigo-50 transition-all">
+                            <input type="checkbox" id="${doc.id}" value="${doc.id}" name="opcao" class="custom-checkbox h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            <span class="font-medium text-gray-700">${nome}</span>
+                        </label>
                     `;
+                    container.innerHTML += element;
+                });
+            } catch (error) {
+                console.error("Erro ao carregar o estado da votação: ", error);
+                const container = document.getElementById('opcoes-container');
+                container.innerHTML = `<p class="text-red-600 col-span-full text-center">Não foi possível carregar as opções. Verifique a configuração do Firebase e sua conexão.</p>`;
+            }
+        }
 
-                    for (const opcaoId in mapaNomesOpcoes) {
-                        const votos = contagemVotos[opcaoId] || 0;
-                        const porcentagem = totalEleitores > 0 ? ((votos / totalEleitores) * 100).toFixed(2) : 0;
-                        
-                        htmlResultados += `<li><strong>${mapaNomesOpcoes[opcaoId]}:</strong> ${votos} votos (${porcentagem}%)</li>`;
-
-                        if (porcentagem > 50) {
-                            vencedorEncontrado = mapaNomesOpcoes[opcaoId];
-                        }
-                    }
-                    htmlResultados += '</ul>';
-
-                    if (vencedorEncontrado) {
-                        htmlResultados += `<div class="mt-4 p-4 bg-green-100 text-green-800 rounded-lg"><strong>Vencedor!</strong> A opção "${vencedorEncontrado}" atingiu mais de 50% dos votos!</div>`;
-                        resultadosContainer.innerHTML = htmlResultados;
-                        document.getElementById('secao-votacao').style.display = 'none';
-                    } else {
-                        htmlResultados += '<div class="mt-4 p-4 bg-yellow-100 text-yellow-800 rounded-lg">';
-                        
-                        let menorVotos = Infinity;
-                        for (const opcaoId in mapaNomesOpcoes) {
-                            const votos = contagemVotos[opcaoId] || 0;
-                            if (votos < menorVotos) {
-                                menorVotos = votos;
-                            }
-                        }
-
-                        const paraEliminarIds = [];
-                        for (const opcaoId in mapaNomesOpcoes) {
-                            if ((contagemVotos[opcaoId] || 0) === menorVotos) {
-                                paraEliminarIds.push(opcaoId);
-                            }
-                        }
-                        
-                        if (paraEliminarIds.length < Object.keys(mapaNomesOpcoes).length) {
-                            htmlResultados += `<strong>Nenhum vencedor.</strong> As opções com menos votos (${menorVotos}) serão eliminadas. Eliminadas: `;
-                            
-                            const nomesEliminados = [];
-                            const batch = db.batch();
-                            paraEliminarIds.forEach(id => {
-                                nomesEliminados.push(mapaNomesOpcoes[id]);
-                                const docRef = opcoesRef.doc(id);
-                                batch.update(docRef, { estaEliminada: true });
-                            });
-                            
-                            await batch.commit();
-                            htmlResultados += nomesEliminados.join(', ') + '.</div>';
-                            
-                            await configRef.update({ rodadaAtual: rodadaAtual + 1 });
-                            htmlResultados += '<p class="mt-2 font-bold">Uma nova rodada começará. Por favor, atualize a página para votar novamente.</p>';
-
-                        } else {
-                            htmlResultados += `<strong>Empate!</strong> Todas as opções tiveram o mesmo número de votos. Nenhuma opção será eliminada. Uma nova rodada começará com as mesmas opções. Por favor, atualize a página.</div>`;
-                        }
-                        
-                        resultadosContainer.innerHTML = htmlResultados;
-                    }
-
-                } catch (error) {
-                    console.error("Erro ao calcular resultados: ", error);
-                    resultadosContainer.innerHTML = '<p class="text-red-500">Ocorreu um erro ao apurar os resultados.</p>';
-                }
+        async function handleVote() {
+            const nomeEleitor = document.getElementById('nome').value.trim();
+            if (!nomeEleitor) {
+                alert('Por favor, digite seu nome para votar.');
+                return;
             }
 
-            // Função principal que executa ao carregar a página
-            window.onload = function() {
-                // Lógica para modo administrador
-                const adminPanel = document.getElementById('admin-panel');
-                const urlParams = new URLSearchParams(window.location.search);
-                const isAdminParam = urlParams.get('admin') === 'true';
+            const checkboxes = document.querySelectorAll('input[name="opcao"]:checked');
+            if (checkboxes.length === 0 || checkboxes.length > 3) {
+                alert('Você deve escolher de 1 a 3 opções.');
+                return;
+            }
 
-                // Se o parâmetro ?admin=true estiver na URL, salva no localStorage
-                if (isAdminParam) {
-                    localStorage.setItem('isVotingAdmin', 'true');
-                    // Redireciona para a URL limpa para não manter o parâmetro visível
-                    window.history.replaceState({}, document.title, window.location.pathname);
+            const escolhas = Array.from(checkboxes).map(cb => cb.value);
+
+            try {
+                const votoExistente = await votosRef.where('nomeEleitor', '==', nomeEleitor).where('rodada', '==', rodadaAtual).get();
+                if (!votoExistente.empty) {
+                    alert('Você já votou nesta rodada!');
+                    return;
                 }
 
-                // Verifica se o usuário é admin (pelo localStorage)
-                const isUserAdmin = localStorage.getItem('isVotingAdmin') === 'true';
+                await votosRef.add({
+                    nomeEleitor: nomeEleitor,
+                    escolhas: escolhas,
+                    rodada: rodadaAtual,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
 
-                if (isUserAdmin) {
-                    adminPanel.style.display = 'block';
+                alert('Voto registrado com sucesso!');
+                document.getElementById('nome').value = '';
+                checkboxes.forEach(cb => cb.checked = false);
+                document.getElementById('secao-votacao').style.display = 'none';
+                document.getElementById('status-votacao').innerText = 'Obrigado por votar! Aguarde os resultados.';
+            } catch (error) {
+                console.error("Erro ao registrar voto: ", error);
+                alert('Ocorreu um erro ao registrar seu voto.');
+            }
+        }
+        
+        async function calculateResults() {
+            const apurarBtn = document.getElementById('apurar-btn');
+            apurarBtn.disabled = true;
+            apurarBtn.innerText = 'Apurando...';
 
-                    // Adiciona uma mensagem informativa para o admin
-                    const appContainer = document.getElementById('app-container');
-                    const adminInfo = document.createElement('div');
-                    adminInfo.className = 'text-center text-sm text-gray-500 bg-indigo-50 p-3 rounded-lg';
-                    adminInfo.innerHTML = `Você está no <strong>modo administrador</strong>. O painel de controle está visível abaixo.`;
-                    // Insere a mensagem de admin logo após o cabeçalho
-                    appContainer.insertBefore(adminInfo, appContainer.children[1]);
+            const resultadosContainer = document.getElementById('resultados-container');
+            resultadosContainer.innerHTML = '<p>Calculando resultados...</p>';
 
-                } else {
-                    adminPanel.style.display = 'none';
+            try {
+                const votosSnapshot = await votosRef.where('rodada', '==', rodadaAtual).get();
+                if (votosSnapshot.empty) {
+                    resultadosContainer.innerHTML = '<p>Nenhum voto foi registrado nesta rodada.</p>';
+                    apurarBtn.disabled = false;
+                    apurarBtn.innerText = 'Encerrar Rodada e Apurar Resultados';
+                    return;
                 }
+
+                const totalEleitores = votosSnapshot.size;
+                const contagemVotos = {};
+                votosSnapshot.forEach(doc => doc.data().escolhas.forEach(id => { contagemVotos[id] = (contagemVotos[id] || 0) + 1; }));
                 
-                // Carrega o resto da aplicação
-                loadVotingState();
-            };
+                const opcoesAtivasSnapshot = await opcoesRef.where('estaEliminada', '==', false).get();
+                const mapaNomesOpcoes = {};
+                opcoesAtivasSnapshot.forEach(doc => { mapaNomesOpcoes[doc.id] = doc.data().nome; });
+
+                let vencedorEncontrado = null;
+                let htmlResultados = `
+                    <h3 class="font-bold text-lg mb-2">Resultados da Rodada ${rodadaAtual}</h3>
+                    <p class="text-sm text-gray-600 mb-4">Total de eleitores: ${totalEleitores}</p>
+                    <ul class="text-left space-y-2">
+                `;
+                Object.keys(mapaNomesOpcoes).forEach(id => {
+                    const votos = contagemVotos[id] || 0;
+                    const porcentagem = totalEleitores > 0 ? ((votos / totalEleitores) * 100).toFixed(2) : 0;
+                    htmlResultados += `<li><strong>${mapaNomesOpcoes[id]}:</strong> ${votos} votos (${porcentagem}%)</li>`;
+                    if (porcentagem > 50) vencedorEncontrado = mapaNomesOpcoes[id];
+                });
+                htmlResultados += '</ul>';
+
+                const resultadoDaRodada = {
+                    numero: rodadaAtual,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                if (vencedorEncontrado) {
+                    htmlResultados += `<div class="mt-4 p-4 bg-green-100 text-green-800 rounded-lg"><strong>Vencedor!</strong> A opção "${vencedorEncontrado}" atingiu mais de 50% dos votos!</div>`;
+                    resultadoDaRodada.status = 'vencedor_encontrado';
+                } else {
+                    htmlResultados += '<div class="mt-4 p-4 bg-yellow-100 text-yellow-800 rounded-lg">';
+                    const menorVotos = Math.min(...Object.keys(mapaNomesOpcoes).map(id => contagemVotos[id] || 0));
+                    const paraEliminarIds = Object.keys(mapaNomesOpcoes).filter(id => (contagemVotos[id] || 0) === menorVotos);
+                    
+                    if (paraEliminarIds.length < Object.keys(mapaNomesOpcoes).length) {
+                        const nomesEliminados = paraEliminarIds.map(id => mapaNomesOpcoes[id]);
+                        htmlResultados += `<strong>Nenhum vencedor.</strong> Opções eliminadas (${menorVotos} votos): ${nomesEliminados.join(', ')}.</div>`;
+                        
+                        const batch = db.batch();
+                        paraEliminarIds.forEach(id => batch.update(opcoesRef.doc(id), { estaEliminada: true }));
+                        await batch.commit();
+
+                        await configRef.update({ rodadaAtual: rodadaAtual + 1 });
+                        htmlResultados += '<p class="mt-2 font-bold">Uma nova rodada começará. Por favor, peça para todos atualizarem a página para votar novamente.</p>';
+                    } else {
+                        htmlResultados += `<strong>Empate!</strong> Todas as opções tiveram o mesmo número de votos. Nenhuma opção será eliminada. Atualize a página para uma nova rodada.</div>`;
+                    }
+                    resultadoDaRodada.status = 'concluida';
+                }
+
+                // **NOVO**: Salva o resultado da rodada no banco de dados para persistência
+                resultadoDaRodada.resultadosHTML = htmlResultados;
+                await rodadasRef.doc(String(rodadaAtual)).set(resultadoDaRodada);
+                
+                resultadosContainer.innerHTML = htmlResultados;
+
+            } catch (error) {
+                console.error("Erro ao calcular resultados: ", error);
+                resultadosContainer.innerHTML = '<p class="text-red-500">Ocorreu um erro ao apurar os resultados.</p>';
+                apurarBtn.disabled = false;
+                apurarBtn.innerText = 'Encerrar Rodada e Apurar Resultados';
+            }
         }
     </script>
 </body>
