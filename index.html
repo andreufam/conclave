@@ -3,611 +3,325 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Votação por Rodadas</title>
+    <title>Conclave MdM</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .hidden { display: none; }
-        .option-item { transition: all 0.3s ease; }
-        .option-item.eliminated { background-color: #fecaca; color: #991b1b; text-decoration: line-through; }
-        .option-btn.selected {
-            border-color: #6366f1;
-            background-color: #eef2ff;
-            font-weight: 500;
-            box-shadow: 0 0 0 2px #a5b4fc;
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Estilo customizado para checkboxes */
+        .custom-checkbox:checked {
+            background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+            border-color: #4f46e5;
+            background-color: #4f46e5;
         }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
 
-    <div id="app-container" class="w-full max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8">
-
-        <!-- Tela Inicial: Criar ou Entrar -->
-        <div id="home-view">
-            <h1 class="text-3xl font-bold text-center text-gray-900">Votação por Rodadas</h1>
-            <p class="text-center text-gray-600 mt-2 mb-8">Crie uma votação onde a opção menos votada é eliminada a cada rodada, até um vencedor ser decidido por maioria absoluta.</p>
-            <div class="space-y-4">
-                <button id="show-create-view-btn" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors">
-                    Criar Nova Votação
-                </button>
-                 <p class="text-center text-sm text-gray-500 pt-4">Para participar, peça ao criador da votação para compartilhar o link com você.</p>
-            </div>
+    <div id="app-container" class="w-full max-w-4xl bg-white rounded-2xl shadow-lg p-6 md:p-8 space-y-6">
+        
+        <!-- Cabeçalho -->
+        <div class="text-center">
+            <h1 id="titulo-principal" class="text-3xl font-bold text-indigo-700">Votação - Rodada 1</h1>
+            <p id="status-votacao" class="text-gray-500 mt-2">Escolha até 3 opções abaixo.</p>
         </div>
 
-        <!-- Tela de Criação -->
-        <div id="create-view" class="hidden">
-            <h2 class="text-2xl font-bold mb-4">Criar Nova Votação</h2>
-            <div class="space-y-4">
-                <div>
-                    <label for="poll-question" class="block text-sm font-medium text-gray-700">Pergunta da votação</label>
-                    <input type="text" id="poll-question" placeholder="Ex: Qual será nosso próximo destino de férias?" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                </div>
-                <div>
-                    <label for="poll-options" class="block text-sm font-medium text-gray-700">Opções de voto (uma por linha)</label>
-                    <textarea id="poll-options" rows="5" placeholder="Opção 1&#10;Opção 2&#10;Opção 3" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></textarea>
-                </div>
-                <div class="flex items-center gap-4">
-                     <button id="back-to-home-btn" class="w-1/3 bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors">Voltar</button>
-                    <button id="create-poll-btn" class="w-2/3 bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors">Criar Votação</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tela do Administrador -->
-        <div id="admin-view" class="hidden">
-            <h2 id="admin-poll-question" class="text-2xl font-bold mb-2"></h2>
-            <p class="text-gray-600 mb-4">Você é o administrador. Compartilhe o link abaixo para que outros possam votar.</p>
-            
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700">Link para Votantes</p>
-                <div class="flex mt-1">
-                    <input type="text" id="voter-link" readonly class="flex-1 block w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-l-md shadow-sm">
-                    <button id="copy-link-btn" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-r-md hover:bg-indigo-700">Copiar</button>
-                </div>
-                 <p id="copy-feedback" class="text-sm text-green-600 mt-1 h-5"></p>
+        <!-- Seção de Votação -->
+        <div id="secao-votacao" class="space-y-4">
+            <div>
+                <label for="nome" class="block text-sm font-medium text-gray-700">Seu Nome</label>
+                <input type="text" id="nome" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="Digite seu nome completo">
             </div>
             
-            <div id="admin-status" class="text-center p-4 rounded-lg bg-indigo-50 mb-4"></div>
-
-            <div id="admin-options-container" class="space-y-2 mb-6"></div>
-            
-            <div id="admin-controls"></div>
-        </div>
-
-        <!-- Tela do Votante -->
-        <div id="voter-view" class="hidden">
-            <h2 id="voter-poll-question" class="text-2xl font-bold text-center mb-2"></h2>
-            <div id="voter-status" class="text-center p-4 rounded-lg bg-indigo-50 text-indigo-800 mb-6"></div>
-            <div id="voter-options-container" class="space-y-3"></div>
-            <div id="voter-controls" class="mt-6"></div>
-            <div id="round-results-container" class="hidden mt-6">
-                 <h3 class="text-lg font-semibold text-center mb-3 border-b pb-2">Resultado da Rodada</h3>
-                 <div id="round-results-list" class="space-y-2"></div>
+            <div id="opcoes-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <!-- Opções de voto serão inseridas aqui pelo JavaScript -->
+                <div class="text-center col-span-full p-8">
+                    <p class="text-gray-500">Carregando opções...</p>
+                </div>
             </div>
+
+            <button onclick="handleVote()" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-300">
+                Votar
+            </button>
         </div>
 
-        <!-- Tela de Vencedor -->
-        <div id="winner-view" class="hidden text-center">
-            <h2 class="text-xl font-semibold mb-2">Votação Encerrada!</h2>
-            <p class="text-gray-600 mb-4">O vencedor é:</p>
-            <div id="winner-name" class="text-4xl font-bold text-indigo-600 p-6 bg-yellow-200 rounded-lg inline-block"></div>
-            <div id="final-results-container" class="hidden mt-6 text-left">
-                 <h3 class="text-lg font-semibold text-center mb-3 border-b pb-2">Resultado Final</h3>
-                 <div id="final-results-list" class="space-y-2"></div>
+        <!-- Seção de Resultados e Admin -->
+        <div id="admin-panel" class="border-t pt-6 space-y-4" style="display: none;">
+            <h2 class="text-xl font-bold text-center text-gray-800">Painel de Controle / Resultados</h2>
+            <div id="resultados-container" class="bg-gray-50 p-4 rounded-lg text-center">
+                <p class="text-gray-600">Os resultados da rodada aparecerão aqui.</p>
             </div>
+            <button onclick="calculateResults()" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-300">
+                Encerrar Rodada e Apurar Resultados
+            </button>
         </div>
 
-         <!-- Carregando... -->
-        <div id="loading-view" class="hidden text-center">
-            <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p class="mt-2 text-gray-600">Carregando votação...</p>
-        </div>
     </div>
 
-    <!-- Módulo Firebase -->
-    <script type="module">
-        // Cole aqui a configuração do seu projeto Firebase
-const firebaseConfig = {
-  apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
-  authDomain: "conclave-mdm.firebaseapp.com",
-  projectId: "conclave-mdm",
-  storageBucket: "conclave-mdm.firebasestorage.app",
-  messagingSenderId: "346904370830",                                                                          appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
-};
-        // Importações do Firebase
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, doc, getDoc, setDoc, addDoc, collection, onSnapshot, query, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    <!-- Scripts do Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
-        // Inicializa o Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
-        // --- Variáveis de Estado ---
-        let currentPollId = null;
-        let currentUser = null;
-        let pollUnsubscribe = null; // Para desligar o listener do onSnapshot
-        let voteCountUnsubscribe = null; // Listener para a contagem de votos
-        let selectedOption = null;
-
-        // --- Elementos do DOM ---
-        const views = {
-            home: document.getElementById('home-view'),
-            create: document.getElementById('create-view'),
-            admin: document.getElementById('admin-view'),
-            voter: document.getElementById('voter-view'),
-            winner: document.getElementById('winner-view'),
-            loading: document.getElementById('loading-view')
+    <script>
+        // --- INÍCIO DA CONFIGURAÇÃO DO FIREBASE ---
+        // COLE AQUI O OBJETO firebaseConfig QUE VOCÊ COPIOU DO SEU PROJETO
+        const firebaseConfig = {
+            apiKey: "SUA_API_KEY",
+            authDomain: "SEU_AUTH_DOMAIN",
+            projectId: "SEU_PROJECT_ID",
+            storageBucket: "SEU_STORAGE_BUCKET",
+            messagingSenderId: "SEU_MESSAGING_SENDER_ID",
+            appId: "SEU_APP_ID"
         };
-        const showCreateViewBtn = document.getElementById('show-create-view-btn');
-        const backToHomeBtn = document.getElementById('back-to-home-btn');
-        const createPollBtn = document.getElementById('create-poll-btn');
-        const copyLinkBtn = document.getElementById('copy-link-btn');
+        // --- FIM DA CONFIGURAÇÃO DO FIREBASE ---
 
-        // --- Funções de UI ---
-        const showView = (viewName) => {
-            Object.values(views).forEach(view => view.classList.add('hidden'));
-            if (views[viewName]) {
-                views[viewName].classList.remove('hidden');
-            }
-        };
+        // Validação da configuração do Firebase
+        if (firebaseConfig.apiKey === "SUA_API_KEY" || firebaseConfig.projectId === "SEU_PROJECT_ID") {
+            const appContainer = document.getElementById('app-container');
+            appContainer.innerHTML = `
+                <div class="text-center">
+                    <h1 class="text-2xl font-bold text-red-600">Erro de Configuração do Firebase!</h1>
+                    <p class="mt-4 text-gray-700">
+                        Parece que você ainda não configurou as chaves do Firebase. A aplicação não pode funcionar sem elas.
+                    </p>
+                    <p class="mt-2 text-gray-600 bg-yellow-100 p-4 rounded-lg">
+                        <strong>Ação necessária:</strong> Abra este arquivo HTML, encontre o objeto <code>firebaseConfig</code> e substitua os valores de exemplo ("SUA_API_KEY", "SEU_PROJECT_ID", etc.) pelas chaves reais que você copiou do seu projeto no console do Firebase.
+                    </p>
+                </div>
+            `;
+        } else {
+            // Inicializa o Firebase
+            firebase.initializeApp(firebaseConfig);
+            const db = firebase.firestore();
 
-        // --- Lógica Principal ---
-        window.onload = () => {
-            signInAnonymously(auth).catch(error => console.error("Erro na autenticação anônima:", error));
-            
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    currentUser = user;
-                    handleUrlChanges();
+            // Referências para as coleções no Firestore
+            const opcoesRef = db.collection('opcoes');
+            const votosRef = db.collection('votos');
+            const configRef = db.collection('configuracao').doc('geral');
+
+            let rodadaAtual = 1;
+
+            // Função para carregar as opções ativas e o estado da votação
+            async function loadVotingState() {
+                try {
+                    const configDoc = await configRef.get();
+                    if (configDoc.exists) {
+                        rodadaAtual = configDoc.data().rodadaAtual;
+                        document.getElementById('titulo-principal').innerText = `Votação - Rodada ${rodadaAtual}`;
+                    }
+
+                    const snapshot = await opcoesRef.where('estaEliminada', '==', false).get();
+                    const container = document.getElementById('opcoes-container');
+                    container.innerHTML = ''; // Limpa o container
+
+                    if (snapshot.empty) {
+                        container.innerHTML = '<p class="text-center col-span-full p-8 text-gray-500">Nenhuma opção disponível para votação.</p>';
+                        return;
+                    }
+
+                    snapshot.forEach(doc => {
+                        const opcao = doc.data();
+                        const opcaoId = doc.id;
+                        const element = `
+                            <label for="${opcaoId}" class="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-indigo-50 transition-all">
+                                <input type="checkbox" id="${opcaoId}" value="${opcaoId}" name="opcao" class="custom-checkbox h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <span class="font-medium text-gray-700">${opcao.nome}</span>
+                            </label>
+                        `;
+                        container.innerHTML += element;
+                    });
+                } catch (error) {
+                    console.error("Erro ao carregar opções: ", error);
+                    const container = document.getElementById('opcoes-container');
+                    container.innerHTML = `<p class="text-red-600 col-span-full text-center">Não foi possível carregar as opções de voto. Verifique se a configuração do Firebase está correta e se você tem conexão com a internet.</p>`;
                 }
-            });
-        };
-
-        const handleUrlChanges = () => {
-            const params = new URLSearchParams(window.location.search);
-            const pollId = params.get('pollId');
-            
-            if (pollId) {
-                currentPollId = pollId;
-                loadPoll(pollId);
-            } else {
-                showView('home');
-            }
-        };
-        
-        async function loadPoll(pollId) {
-            showView('loading');
-            const pollRef = doc(db, 'polls', pollId);
-
-            if (pollUnsubscribe) pollUnsubscribe();
-            if (voteCountUnsubscribe) {
-                voteCountUnsubscribe();
-                voteCountUnsubscribe = null;
             }
 
-            pollUnsubscribe = onSnapshot(pollRef, (pollDoc) => {
-                if (!pollDoc.exists()) {
-                    alert('Votação não encontrada!');
-                    window.location.search = '';
+            // Função para lidar com o envio do voto
+            async function handleVote() {
+                const nomeEleitor = document.getElementById('nome').value.trim();
+                if (!nomeEleitor) {
+                    alert('Por favor, digite seu nome para votar.');
                     return;
                 }
-                
-                const pollData = pollDoc.data();
-                const isAdmin = localStorage.getItem(`admin_${pollId}`) === currentUser.uid;
 
-                if (pollData.status === 'finished') {
-                    renderWinnerView(pollData);
-                } else if (isAdmin) {
-                    renderAdminView(pollData);
-                } else {
-                    renderVoterView(pollData);
-                }
-            }, (error) => {
-                console.error("Erro no listener da votação:", error);
-                alert("Ocorreu um erro ao carregar os dados da votação. Verifique o console para mais detalhes.");
-            });
-        }
-        
-        // --- Funções de Renderização (Views) ---
-
-        function renderAdminView(pollData) {
-            showView('admin');
-            document.getElementById('admin-poll-question').textContent = pollData.question;
-            
-            const voterLinkInput = document.getElementById('voter-link');
-            voterLinkInput.value = `${window.location.origin}${window.location.pathname}?pollId=${currentPollId}`;
-            
-            const adminStatus = document.getElementById('admin-status');
-            const optionsContainer = document.getElementById('admin-options-container');
-            const adminControls = document.getElementById('admin-controls');
-
-            if (voteCountUnsubscribe) {
-                voteCountUnsubscribe();
-                voteCountUnsubscribe = null;
-            }
-
-            optionsContainer.innerHTML = '';
-            const roundResults = pollData.results?.[pollData.round] || {};
-            
-            pollData.options.forEach(opt => {
-                const div = document.createElement('div');
-                div.className = `option-item p-3 border rounded-lg flex justify-between items-center ${!opt.active ? 'eliminated' : 'bg-gray-50'}`;
-                div.innerHTML = `<span>${opt.name}</span> <span class="font-semibold text-gray-500">${roundResults[opt.name] || 0} votos</span>`;
-
-                if (pollData.status === 'results') {
-                    div.classList.add('cursor-pointer', 'hover:bg-gray-200');
-                    div.onclick = () => toggleOptionStatus(opt.name);
+                const checkboxes = document.querySelectorAll('input[name="opcao"]:checked');
+                if (checkboxes.length === 0 || checkboxes.length > 3) {
+                    alert('Você deve escolher de 1 a 3 opções.');
+                    return;
                 }
 
-                optionsContainer.appendChild(div);
-            });
+                const escolhas = Array.from(checkboxes).map(cb => cb.value);
 
-            adminControls.innerHTML = '';
-            let button;
-            switch(pollData.status) {
-                case 'pending':
-                    adminStatus.textContent = `Rodada ${pollData.round}. A votação ainda não começou.`;
-                    button = createButton('Iniciar Rodada 1', startRound);
-                    adminControls.appendChild(button);
-                    break;
-                case 'voting':
-                    adminStatus.innerHTML = `Rodada ${pollData.round}. Votação em andamento. <span id="vote-counter" class="font-semibold">(0 votos recebidos)</span>`;
-                    const votesPath = collection(db, `polls/${currentPollId}/votes_round_${pollData.round}`);
-                    voteCountUnsubscribe = onSnapshot(votesPath, (snapshot) => {
-                        const voteCount = snapshot.size;
-                        const currentCounter = document.getElementById('vote-counter');
-                        if (currentCounter) {
-                           currentCounter.textContent = `(${voteCount} ${voteCount === 1 ? 'voto recebido' : 'votos recebidos'})`;
-                        }
-                    }, (error) => {
-                        console.error("Erro no listener de contagem de votos:", error);
-                    });
-                    button = createButton('Encerrar Rodada e Contar Votos', endRound);
-                    adminControls.appendChild(button);
-                    break;
-                case 'results':
-                    adminStatus.innerHTML = `Rodada ${pollData.round} encerrada. Clique nas opções para eliminar ou reativar antes de iniciar a próxima rodada.`;
-                    button = createButton(`Iniciar Próxima Rodada`, startRound);
-                    adminControls.appendChild(button);
-                    break;
-            }
-        }
-        
-        function renderVoterView(pollData) {
-            showView('voter');
-            document.getElementById('voter-poll-question').textContent = pollData.question;
-            const statusDiv = document.getElementById('voter-status');
-            const optionsContainer = document.getElementById('voter-options-container');
-            const controlsContainer = document.getElementById('voter-controls');
-            const resultsContainer = document.getElementById('round-results-container');
-            const resultsList = document.getElementById('round-results-list');
-            const resultsTitle = resultsContainer.querySelector('h3');
+                try {
+                    // Verifica se o eleitor já votou nesta rodada
+                    const votoExistente = await votosRef
+                        .where('nomeEleitor', '==', nomeEleitor)
+                        .where('rodada', '==', rodadaAtual)
+                        .get();
 
-            optionsContainer.innerHTML = '';
-            controlsContainer.innerHTML = '';
-            resultsContainer.classList.add('hidden');
-            resultsList.innerHTML = '';
-            selectedOption = null;
-
-            const userVotePath = `polls/${currentPollId}/votes_round_${pollData.round}`;
-            const userVoteRef = doc(db, userVotePath, currentUser.uid);
-
-            getDoc(userVoteRef).then(voteDoc => {
-                const hasVoted = voteDoc.exists();
-                
-                if (pollData.status === 'pending') {
-                    statusDiv.textContent = 'Aguardando o administrador iniciar a votação...';
-                } else if (pollData.status === 'voting') {
-                    if (hasVoted) {
-                        statusDiv.textContent = `Seu voto foi computado! Aguardando o fim da Rodada ${pollData.round}.`;
-                    } else {
-                        statusDiv.textContent = `Rodada ${pollData.round}. Por favor, escolha uma opção e confirme seu voto:`;
-                        
-                        const submitButton = document.createElement('button');
-                        submitButton.id = 'submit-vote-btn';
-                        submitButton.textContent = 'Submeter Voto';
-                        submitButton.className = 'w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed';
-                        submitButton.disabled = true;
-                        submitButton.onclick = () => {
-                            if (selectedOption) {
-                                castVote(selectedOption, pollData.round);
-                                submitButton.disabled = true;
-                                submitButton.textContent = 'Voto enviado...';
-                            }
-                        };
-                        controlsContainer.appendChild(submitButton);
-
-                        pollData.options.filter(opt => opt.active).forEach(opt => {
-                            const button = document.createElement('button');
-                            button.textContent = opt.name;
-                            button.className = 'option-btn w-full text-left bg-white p-4 border rounded-lg hover:bg-indigo-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-300';
-                            button.dataset.optionName = opt.name;
-
-                            button.onclick = () => {
-                                selectedOption = opt.name;
-                                document.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
-                                button.classList.add('selected');
-                                document.getElementById('submit-vote-btn').disabled = false;
-                            };
-                            optionsContainer.appendChild(button);
-                        });
+                    if (!votoExistente.empty) {
+                        alert('Você já votou nesta rodada!');
+                        return;
                     }
-                } else if (pollData.status === 'results') {
-                    statusDiv.textContent = `Rodada ${pollData.round} encerrada. Aguardando o início da próxima rodada.`;
+
+                    // Salva o novo voto
+                    await votosRef.add({
+                        nomeEleitor: nomeEleitor,
+                        escolhas: escolhas,
+                        rodada: rodadaAtual,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    alert('Voto registrado com sucesso!');
+                    document.getElementById('nome').value = '';
+                    checkboxes.forEach(cb => cb.checked = false);
+                    document.getElementById('secao-votacao').style.display = 'none';
+                    document.getElementById('status-votacao').innerText = 'Obrigado por votar! Aguarde os resultados.';
+
+                } catch (error) {
+                    console.error("Erro ao registrar voto: ", error);
+                    alert('Ocorreu um erro ao registrar seu voto.');
+                }
+            }
+
+            // Função para apurar os resultados (função de "admin")
+            async function calculateResults() {
+                const resultadosContainer = document.getElementById('resultados-container');
+                resultadosContainer.innerHTML = '<p>Calculando resultados...</p>';
+
+                try {
+                    const votosSnapshot = await votosRef.where('rodada', '==', rodadaAtual).get();
+                    if (votosSnapshot.empty) {
+                        resultadosContainer.innerHTML = '<p>Nenhum voto foi registrado nesta rodada.</p>';
+                        return;
+                    }
+
+                    const totalEleitores = votosSnapshot.size;
+                    const contagemVotos = {};
+
+                    votosSnapshot.forEach(doc => {
+                        const voto = doc.data();
+                        voto.escolhas.forEach(opcaoId => {
+                            contagemVotos[opcaoId] = (contagemVotos[opcaoId] || 0) + 1;
+                        });
+                    });
                     
-                    const roundResults = pollData.results[pollData.round];
-                    if (roundResults) {
-                        resultsContainer.classList.remove('hidden');
-                        resultsTitle.textContent = `Resultado da Rodada ${pollData.round}`;
-                        
-                        const optionsStatus = pollData.options.reduce((acc, opt) => {
-                            acc[opt.name] = opt.active;
-                            return acc;
-                        }, {});
-
-                        const sortedOptions = Object.keys(roundResults).sort((a, b) => roundResults[b] - roundResults[a]);
-
-                        sortedOptions.forEach(optName => {
-                            const isActive = optionsStatus[optName];
-                            const resultDiv = document.createElement('div');
-                            resultDiv.className = `flex justify-between items-center p-2 rounded ${!isActive ? 'bg-red-100 text-red-800 line-through' : 'bg-gray-50'}`;
-                            resultDiv.innerHTML = `<span>${optName} ${!isActive ? '(Eliminado)' : ''}</span> <span class="font-semibold">${roundResults[optName]} votos</span>`;
-                            resultsList.appendChild(resultDiv);
-                        });
-                    }
-                }
-            });
-        }
-
-        function renderWinnerView(pollData) {
-            showView('winner');
-            document.getElementById('winner-name').textContent = pollData.winner;
-
-            const resultsContainer = document.getElementById('final-results-container');
-            const resultsList = document.getElementById('final-results-list');
-            resultsList.innerHTML = '';
-            
-            const allRounds = pollData.results ? Object.keys(pollData.results).map(Number) : [];
-            const lastRoundNumber = allRounds.length > 0 ? Math.max(...allRounds) : null;
-            const finalResults = lastRoundNumber ? pollData.results[lastRoundNumber] : null;
-            
-            if (finalResults) {
-                resultsContainer.classList.remove('hidden');
-                const sortedOptions = Object.keys(finalResults).sort((a, b) => finalResults[b] - finalResults[a]);
-
-                sortedOptions.forEach(optName => {
-                    const isWinner = optName === pollData.winner;
-                    const resultDiv = document.createElement('div');
-                    resultDiv.className = `flex justify-between items-center p-2 rounded ${isWinner ? 'bg-green-100 font-bold text-green-800' : 'bg-gray-50'}`;
-                    resultDiv.innerHTML = `<span>${optName}</span> <span class="font-semibold">${finalResults[optName]} votos</span>`;
-                    resultsList.appendChild(resultDiv);
-                });
-            } else {
-                 resultsContainer.classList.add('hidden');
-            }
-        }
-
-        // --- Ações (Admin e Votante) ---
-
-        async function createPoll() {
-            const question = document.getElementById('poll-question').value.trim();
-            const optionsText = document.getElementById('poll-options').value.trim();
-            
-            if (!question || !optionsText) {
-                alert('Por favor, preencha a pergunta e as opções.');
-                return;
-            }
-
-            const options = optionsText.split('\n').map(opt => opt.trim()).filter(Boolean);
-            if (options.length < 2) {
-                alert('São necessárias pelo menos duas opções.');
-                return;
-            }
-
-            try {
-                const pollData = {
-                    question,
-                    options: options.map(name => ({ name, active: true })),
-                    round: 1,
-                    status: 'pending', // pending, voting, results, finished
-                    adminId: currentUser.uid,
-                    createdAt: new Date(),
-                    results: {},
-                    winner: null,
-                    lastEliminated: null
-                };
-                
-                const pollRef = await addDoc(collection(db, 'polls'), pollData);
-                currentPollId = pollRef.id;
-
-                localStorage.setItem(`admin_${currentPollId}`, currentUser.uid);
-                window.history.pushState({}, '', `?pollId=${currentPollId}`);
-                loadPoll(currentPollId);
-
-            } catch (error) {
-                console.error("Erro ao criar votação:", error);
-                alert('Ocorreu um erro ao criar a votação.');
-            }
-        }
-        
-        async function startRound() {
-            const pollRef = doc(db, 'polls', currentPollId);
-            const pollDoc = await getDoc(pollRef);
-            if (!pollDoc.exists()) return;
-            const pollData = pollDoc.data();
-            
-            const activeOptions = pollData.options.filter(opt => opt.active);
-            if (activeOptions.length < 2) {
-                await updateDoc(pollRef, {
-                    status: 'finished',
-                    winner: activeOptions[0]?.name || "Ninguém"
-                });
-                return;
-            }
-            
-            const nextRound = pollData.status === 'pending' ? 1 : pollData.round + 1;
-
-            await updateDoc(pollRef, { 
-                status: 'voting',
-                round: nextRound
-            });
-        }
-
-        async function endRound() {
-            const pollRef = doc(db, "polls", currentPollId);
-            const pollSnap = await getDoc(pollRef);
-            if (!pollSnap.exists()) return;
-            let pollData = pollSnap.data();
-            
-            const votesPath = `polls/${currentPollId}/votes_round_${pollData.round}`;
-            const votesQuery = query(collection(db, votesPath));
-            const votesSnapshot = await getDocs(votesQuery);
-
-            const voteCounts = {};
-            pollData.options.filter(o => o.active).forEach(o => voteCounts[o.name] = 0);
-            
-            let totalVotes = 0;
-            votesSnapshot.forEach(doc => {
-                const vote = doc.data().option;
-                if (voteCounts.hasOwnProperty(vote)) {
-                    voteCounts[vote]++;
-                    totalVotes++;
-                }
-            });
-
-            const resultsForRound = { ...pollData.results, [pollData.round]: voteCounts };
-            const activeOptions = pollData.options.filter(opt => opt.active);
-
-            // Case 1: Check for an absolute majority winner. This is the highest priority.
-            for (const option of activeOptions) {
-                if (totalVotes > 0 && voteCounts[option.name] > totalVotes / 2) {
-                    await updateDoc(pollRef, { status: 'finished', winner: option.name, results: resultsForRound });
-                    return; // Winner found, stop everything.
-                }
-            }
-            
-            // Case 2: Handle the final round with exactly two options.
-            if (activeOptions.length === 2) {
-                const [optA, optB] = activeOptions;
-                // If it's a tie, defer to admin.
-                if (voteCounts[optA.name] === voteCounts[optB.name]) {
-                    await updateDoc(pollRef, { 
-                        status: 'results', 
-                        lastEliminated: null, // No one is auto-eliminated
-                        results: resultsForRound 
+                    const opcoesAtivasSnapshot = await opcoesRef.where('estaEliminada', '==', false).get();
+                    const mapaNomesOpcoes = {};
+                    opcoesAtivasSnapshot.forEach(doc => {
+                        mapaNomesOpcoes[doc.id] = doc.data().nome;
                     });
-                } else {
-                    // If not a tie, the one with more votes is the winner.
-                    const winnerName = voteCounts[optA.name] > voteCounts[optB.name] ? optA.name : optB.name;
-                    await updateDoc(pollRef, { status: 'finished', winner: winnerName, results: resultsForRound });
+
+                    let vencedorEncontrado = null;
+                    let htmlResultados = `
+                        <h3 class="font-bold text-lg mb-2">Resultados da Rodada ${rodadaAtual}</h3>
+                        <p class="text-sm text-gray-600 mb-4">Total de eleitores: ${totalEleitores}</p>
+                        <ul class="text-left space-y-2">
+                    `;
+
+                    for (const opcaoId in mapaNomesOpcoes) {
+                        const votos = contagemVotos[opcaoId] || 0;
+                        const porcentagem = totalEleitores > 0 ? ((votos / totalEleitores) * 100).toFixed(2) : 0;
+                        
+                        htmlResultados += `<li><strong>${mapaNomesOpcoes[opcaoId]}:</strong> ${votos} votos (${porcentagem}%)</li>`;
+
+                        if (porcentagem > 50) {
+                            vencedorEncontrado = mapaNomesOpcoes[opcaoId];
+                        }
+                    }
+                    htmlResultados += '</ul>';
+
+                    if (vencedorEncontrado) {
+                        htmlResultados += `<div class="mt-4 p-4 bg-green-100 text-green-800 rounded-lg"><strong>Vencedor!</strong> A opção "${vencedorEncontrado}" atingiu mais de 50% dos votos!</div>`;
+                        resultadosContainer.innerHTML = htmlResultados;
+                        document.getElementById('secao-votacao').style.display = 'none';
+                    } else {
+                        htmlResultados += '<div class="mt-4 p-4 bg-yellow-100 text-yellow-800 rounded-lg">';
+                        
+                        let menorVotos = Infinity;
+                        for (const opcaoId in mapaNomesOpcoes) {
+                            const votos = contagemVotos[opcaoId] || 0;
+                            if (votos < menorVotos) {
+                                menorVotos = votos;
+                            }
+                        }
+
+                        const paraEliminarIds = [];
+                        for (const opcaoId in mapaNomesOpcoes) {
+                            if ((contagemVotos[opcaoId] || 0) === menorVotos) {
+                                paraEliminarIds.push(opcaoId);
+                            }
+                        }
+                        
+                        if (paraEliminarIds.length < Object.keys(mapaNomesOpcoes).length) {
+                            htmlResultados += `<strong>Nenhum vencedor.</strong> As opções com menos votos (${menorVotos}) serão eliminadas. Eliminadas: `;
+                            
+                            const nomesEliminados = [];
+                            const batch = db.batch();
+                            paraEliminarIds.forEach(id => {
+                                nomesEliminados.push(mapaNomesOpcoes[id]);
+                                const docRef = opcoesRef.doc(id);
+                                batch.update(docRef, { estaEliminada: true });
+                            });
+                            
+                            await batch.commit();
+                            htmlResultados += nomesEliminados.join(', ') + '.</div>';
+                            
+                            await configRef.update({ rodadaAtual: rodadaAtual + 1 });
+                            htmlResultados += '<p class="mt-2 font-bold">Uma nova rodada começará. Por favor, atualize a página para votar novamente.</p>';
+
+                        } else {
+                            htmlResultados += `<strong>Empate!</strong> Todas as opções tiveram o mesmo número de votos. Nenhuma opção será eliminada. Uma nova rodada começará com as mesmas opções. Por favor, atualize a página.</div>`;
+                        }
+                        
+                        resultadosContainer.innerHTML = htmlResultados;
+                    }
+
+                } catch (error) {
+                    console.error("Erro ao calcular resultados: ", error);
+                    resultadosContainer.innerHTML = '<p class="text-red-500">Ocorreu um erro ao apurar os resultados.</p>';
                 }
-                return; // Stop after handling the two-option scenario.
             }
 
-            // Case 3: Standard elimination for more than two options.
-            if (activeOptions.length > 2) {
-                let minVotes = Infinity;
-                let leastVotedOptions = [];
-                activeOptions.forEach(opt => {
-                    const count = voteCounts[opt.name];
-                    if (count < minVotes) {
-                        minVotes = count;
-                        leastVotedOptions = [opt.name];
-                    } else if (count === minVotes) {
-                        leastVotedOptions.push(opt.name);
-                    }
-                });
+            // Função principal que executa ao carregar a página
+            window.onload = function() {
+                // Lógica para modo administrador
+                const adminPanel = document.getElementById('admin-panel');
+                const urlParams = new URLSearchParams(window.location.search);
+                const isAdminParam = urlParams.get('admin') === 'true';
 
-                // Auto-eliminate the first of the least-voted options
-                const optionToEliminate = leastVotedOptions[0]; 
-                const newOptions = pollData.options.map(opt => {
-                    if (opt.name === optionToEliminate) {
-                        return { ...opt, active: false };
-                    }
-                    return opt;
-                });
-                
-                // Check if this elimination results in a winner
-                const remainingActive = newOptions.filter(opt => opt.active);
-                if (remainingActive.length === 1) {
-                    await updateDoc(pollRef, { status: 'finished', winner: remainingActive[0].name, options: newOptions, results: resultsForRound });
-                } else {
-                     // Otherwise, just show the results for the admin to confirm and start next round
-                    await updateDoc(pollRef, { status: 'results', options: newOptions, lastEliminated: optionToEliminate, results: resultsForRound });
+                // Se o parâmetro ?admin=true estiver na URL, salva no localStorage
+                if (isAdminParam) {
+                    localStorage.setItem('isVotingAdmin', 'true');
+                    // Redireciona para a URL limpa para não manter o parâmetro visível
+                    window.history.replaceState({}, document.title, window.location.pathname);
                 }
-                return;
-            }
-            
-            // Fallback for any other case (e.g. 0 or 1 options somehow)
-            await updateDoc(pollRef, { status: 'results', results: resultsForRound });
-        }
 
-        async function toggleOptionStatus(optionNameToToggle) {
-            const pollRef = doc(db, 'polls', currentPollId);
-            try {
-                const pollDoc = await getDoc(pollRef);
-                if (!pollDoc.exists()) return;
+                // Verifica se o usuário é admin (pelo localStorage)
+                const isUserAdmin = localStorage.getItem('isVotingAdmin') === 'true';
 
-                const pollData = pollDoc.data();
-                if (pollData.status !== 'results') return;
+                if (isUserAdmin) {
+                    adminPanel.style.display = 'block';
 
-                const newOptions = pollData.options.map(opt => {
-                    if (opt.name === optionNameToToggle) {
-                        return { ...opt, active: !opt.active };
-                    }
-                    return opt;
-                });
+                    // Adiciona uma mensagem informativa para o admin
+                    const appContainer = document.getElementById('app-container');
+                    const adminInfo = document.createElement('div');
+                    adminInfo.className = 'text-center text-sm text-gray-500 bg-indigo-50 p-3 rounded-lg';
+                    adminInfo.innerHTML = `Você está no <strong>modo administrador</strong>. O painel de controle está visível abaixo.`;
+                    // Insere a mensagem de admin logo após o cabeçalho
+                    appContainer.insertBefore(adminInfo, appContainer.children[1]);
+
+                } else {
+                    adminPanel.style.display = 'none';
+                }
                 
-                await updateDoc(pollRef, { options: newOptions });
-
-            } catch (error) {
-                console.error("Erro ao alterar status da opção:", error);
-                alert("Ocorreu um erro.");
-            }
+                // Carrega o resto da aplicação
+                loadVotingState();
+            };
         }
-        
-        async function castVote(optionName, round) {
-            const votePath = `polls/${currentPollId}/votes_round_${round}`;
-            const voteRef = doc(db, votePath, currentUser.uid);
-            try {
-                await setDoc(voteRef, { option: optionName, timestamp: new Date() });
-            } catch (error) {
-                console.error("Erro ao registrar voto:", error);
-                alert("Não foi possível registrar seu voto.");
-            }
-        }
-
-        // --- Funções Auxiliares ---
-        function createButton(text, onClick) {
-            const button = document.createElement('button');
-            button.textContent = text;
-            button.className = "w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors";
-            button.onclick = onClick;
-            return button;
-        }
-        
-        function copyLinkToClipboard() {
-            const linkInput = document.getElementById('voter-link');
-            navigator.clipboard.writeText(linkInput.value).then(() => {
-                const feedback = document.getElementById('copy-feedback');
-                feedback.textContent = 'Copiado!';
-                setTimeout(() => feedback.textContent = '', 2000);
-            });
-        }
-        
-        // --- Event Listeners ---
-        showCreateViewBtn.addEventListener('click', () => showView('create'));
-        backToHomeBtn.addEventListener('click', () => showView('home'));
-        createPollBtn.addEventListener('click', createPoll);
-        copyLinkBtn.addEventListener('click', copyLinkToClipboard);
-
     </script>
 </body>
 </html>
-
