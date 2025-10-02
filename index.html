@@ -10,52 +10,83 @@
         body {
             font-family: 'Inter', sans-serif;
         }
-        /* Estilo customizado para checkboxes */
         .custom-checkbox:checked {
             background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
             border-color: #4f46e5;
             background-color: #4f46e5;
         }
+        .hidden-view { display: none; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
 
     <div id="app-container" class="w-full max-w-4xl bg-white rounded-2xl shadow-lg p-6 md:p-8 space-y-6">
-        
-        <!-- Cabeçalho -->
-        <div class="text-center">
-            <h1 id="titulo-principal" class="text-3xl font-bold text-indigo-700">Votação - Rodada 1</h1>
-            <p id="status-votacao" class="text-gray-500 mt-2">Escolha até 3 opções abaixo.</p>
+
+        <!-- ===== VIEW: CARREGANDO ===== -->
+        <div id="loading-view" class="text-center p-8">
+            <h1 class="text-2xl font-bold text-indigo-700">Carregando Votação...</h1>
+            <p class="text-gray-500 mt-2">Conectando ao sistema...</p>
         </div>
 
-        <!-- Seção de Votação -->
-        <div id="secao-votacao" class="space-y-4">
+        <!-- ===== VIEW: CONFIGURAÇÃO (Admin) ===== -->
+        <div id="setup-view" class="hidden-view space-y-4">
+            <h1 class="text-2xl font-bold text-center text-indigo-700">Criar Nova Votação</h1>
+            <p class="text-center text-gray-600">Insira as opções de voto abaixo, uma por linha.</p>
             <div>
-                <label for="nome" class="block text-sm font-medium text-gray-700">Seu Nome</label>
-                <input type="text" id="nome" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" placeholder="Digite seu nome completo">
+                <textarea id="opcoes-input" rows="8" class="w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="Opção A&#10;Opção B&#10;Opção C"></textarea>
             </div>
-            
-            <div id="opcoes-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                <!-- Opções de voto serão inseridas aqui pelo JavaScript -->
-                <div class="text-center col-span-full p-8">
-                    <p class="text-gray-500">Carregando opções...</p>
-                </div>
-            </div>
-
-            <button onclick="handleVote()" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-300">
-                Votar
+            <button onclick="startNewPoll()" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700">
+                Limpar Dados Anteriores e Iniciar Nova Votação
             </button>
         </div>
 
-        <!-- Seção de Resultados e Admin -->
-        <div id="admin-section" class="border-t pt-6 space-y-4">
-            <h2 class="text-xl font-bold text-center text-gray-800">Painel de Controle / Resultados</h2>
-            <div id="resultados-container" class="bg-gray-50 p-4 rounded-lg text-center">
-                <p class="text-gray-600">Os resultados da rodada aparecerão aqui.</p>
+        <!-- ===== VIEW: AGUARDANDO (Visitante) ===== -->
+        <div id="waiting-view" class="hidden-view text-center p-8">
+            <h1 class="text-2xl font-bold text-indigo-700">Votação em Breve</h1>
+            <p class="text-gray-500 mt-2">O administrador ainda não iniciou a votação. Por favor, aguarde.</p>
+        </div>
+        
+        <!-- ===== VIEW: VOTAÇÃO ATIVA ===== -->
+        <div id="voting-view" class="hidden-view space-y-6">
+             <!-- Cabeçalho -->
+            <div class="text-center">
+                <h1 id="titulo-principal" class="text-3xl font-bold text-indigo-700">Votação - Rodada 1</h1>
+                <p id="status-votacao" class="text-gray-500 mt-2">Escolha até 3 opções abaixo.</p>
             </div>
-            <button id="apurar-btn" onclick="calculateResults()" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-300">
-                Encerrar Rodada e Apurar Resultados
-            </button>
+
+            <!-- Seção de Votação -->
+            <div id="secao-votacao" class="space-y-4">
+                <div>
+                    <label for="nome" class="block text-sm font-medium text-gray-700">Seu Nome</label>
+                    <input type="text" id="nome" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" placeholder="Digite seu nome completo">
+                </div>
+                
+                <div id="opcoes-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    <!-- Opções de voto serão inseridas aqui -->
+                </div>
+
+                <button onclick="handleVote()" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700">
+                    Votar
+                </button>
+            </div>
+
+            <!-- Seção de Admin -->
+            <div id="admin-panel" class="border-t pt-6 space-y-4 hidden-view">
+                <h2 class="text-xl font-bold text-center text-gray-800">Painel de Controle</h2>
+                <div id="resultados-container" class="bg-gray-50 p-4 rounded-lg text-center">
+                    <p class="text-gray-600">Os resultados da rodada aparecerão aqui.</p>
+                </div>
+                <button onclick="calculateResults()" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700">
+                    Encerrar Rodada e Apurar Resultados
+                </button>
+            </div>
+        </div>
+
+        <!-- ===== VIEW: FINALIZADA ===== -->
+        <div id="finished-view" class="hidden-view text-center p-8">
+            <h1 class="text-2xl font-bold text-green-700">Votação Finalizada!</h1>
+            <p class="text-gray-600 mt-4 text-lg">O vencedor é:</p>
+            <p id="winner-name" class="text-4xl font-extrabold text-indigo-800 mt-2"></p>
         </div>
 
     </div>
@@ -65,167 +96,143 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <script>
-        // --- INÍCIO DA CONFIGURAÇÃO DO FIREBASE ---
+        // --- CONFIGURAÇÃO DO FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
   authDomain: "conclave-mdm.firebaseapp.com",
   projectId: "conclave-mdm",
   storageBucket: "conclave-mdm.firebasestorage.app",
   messagingSenderId: "346904370830",                                                                          appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
-};       
-        // --- FIM DA CONFIGURAÇÃO DO FIREBASE ---
-
-        let db;
-        let opcoesRef, votosRef, configRef, rodadasRef;
+};
+        
+        let db; // Variável global para o banco de dados
+        let isUserAdmin = false;
         let rodadaAtual = 1;
 
-        // Validação da configuração do Firebase
-        if (firebaseConfig.apiKey === "SUA_API_KEY" || firebaseConfig.projectId === "SEU_PROJECT_ID") {
-            const appContainer = document.getElementById('app-container');
-            appContainer.innerHTML = `
-                <div class="text-center">
-                    <h1 class="text-2xl font-bold text-red-600">Erro de Configuração do Firebase!</h1>
-                    <p class="mt-4 text-gray-700">
-                        Parece que você ainda não configurou as chaves do Firebase. A aplicação não pode funcionar sem elas.
-                    </p>
-                    <p class="mt-2 text-gray-600 bg-yellow-100 p-4 rounded-lg">
-                        <strong>Ação necessária:</strong> Abra este arquivo HTML, encontre o objeto <code>firebaseConfig</code> e substitua os valores de exemplo pelas chaves reais do seu projeto no Firebase.
-                    </p>
-                </div>
-            `;
-        } else {
+        // --- INICIALIZAÇÃO E GERENCIAMENTO DE ESTADO ---
+        window.onload = function() {
+            // Valida a configuração
+            if (firebaseConfig.apiKey === "SUA_API_KEY") {
+                document.getElementById('app-container').innerHTML = `<div class="text-center p-4 bg-red-100 text-red-800 rounded-lg"><strong>Erro de Configuração:</strong> Cole suas chaves do Firebase no objeto firebaseConfig neste arquivo.</div>`;
+                return;
+            }
+
             firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
-            opcoesRef = db.collection('opcoes');
-            votosRef = db.collection('votos');
-            configRef = db.collection('configuracao').doc('geral');
-            rodadasRef = db.collection('rodadas'); // Nova coleção para salvar resultados
-            window.onload = loadVotingState;
-        }
 
-        async function loadVotingState() {
-            try {
-                const configDoc = await configRef.get();
-                if (configDoc.exists) {
-                    rodadaAtual = configDoc.data().rodadaAtual;
-                    document.getElementById('titulo-principal').innerText = `Votação - Rodada ${rodadaAtual}`;
-                }
+            // Lógica para modo administrador
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('admin') === 'true') {
+                localStorage.setItem('isVotingAdmin', 'true');
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            isUserAdmin = localStorage.getItem('isVotingAdmin') === 'true';
 
-                // **NOVO**: Restaura o painel de resultados da última rodada concluída
-                if (rodadaAtual > 1) {
-                    const rodadaAnteriorRef = rodadasRef.doc(String(rodadaAtual - 1));
-                    const doc = await rodadaAnteriorRef.get();
-                    if (doc.exists) {
-                        const dadosRodadaAnterior = doc.data();
-                        document.getElementById('resultados-container').innerHTML = dadosRodadaAnterior.resultadosHTML;
-                        
-                        // Se um vencedor foi encontrado, encerra a votação permanentemente
-                        if (dadosRodadaAnterior.status === 'vencedor_encontrado') {
-                            document.getElementById('secao-votacao').style.display = 'none';
-                            document.getElementById('admin-section').style.display = 'none';
-                            document.getElementById('status-votacao').innerText = 'A votação foi encerrada.';
-                            return; // Interrompe a execução para não carregar novas opções
-                        }
-                    }
-                }
+            loadAppState();
+        };
 
-                const snapshot = await opcoesRef.where('estaEliminada', '==', false).get();
-                const container = document.getElementById('opcoes-container');
-                container.innerHTML = ''; 
+        async function loadAppState() {
+            const configRef = db.collection('configuracao').doc('geral');
+            const configDoc = await configRef.get();
 
-                if (snapshot.empty) {
-                    container.innerHTML = '<p class="text-center col-span-full p-8 text-gray-500">Nenhuma opção disponível para votação.</p>';
-                    return;
-                }
+            showView('loading-view');
 
-                snapshot.forEach(doc => {
-                    const { nome } = doc.data();
-                    const element = `
-                        <label for="${doc.id}" class="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-indigo-50 transition-all">
-                            <input type="checkbox" id="${doc.id}" value="${doc.id}" name="opcao" class="custom-checkbox h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                            <span class="font-medium text-gray-700">${nome}</span>
-                        </label>
-                    `;
-                    container.innerHTML += element;
-                });
-            } catch (error) {
-                console.error("Erro ao carregar o estado da votação: ", error);
-                const container = document.getElementById('opcoes-container');
-                container.innerHTML = `<p class="text-red-600 col-span-full text-center">Não foi possível carregar as opções. Verifique a configuração do Firebase e sua conexão.</p>`;
+            if (!configDoc.exists || configDoc.data().status === 'configuracao') {
+                if (isUserAdmin) showView('setup-view');
+                else showView('waiting-view');
+            } else if (configDoc.data().status === 'votacao') {
+                rodadaAtual = configDoc.data().rodadaAtual;
+                showView('voting-view');
+                loadVotingOptions();
+                if(isUserAdmin) document.getElementById('admin-panel').classList.remove('hidden-view');
+            } else if (configDoc.data().status === 'finalizada') {
+                document.getElementById('winner-name').innerText = configDoc.data().vencedor;
+                showView('finished-view');
             }
         }
 
-        async function handleVote() {
-            const nomeEleitor = document.getElementById('nome').value.trim();
-            if (!nomeEleitor) {
-                alert('Por favor, digite seu nome para votar.');
+        function showView(viewId) {
+            const views = ['loading-view', 'setup-view', 'waiting-view', 'voting-view', 'finished-view'];
+            views.forEach(id => {
+                document.getElementById(id).classList.add('hidden-view');
+            });
+            document.getElementById(viewId).classList.remove('hidden-view');
+        }
+
+        // --- FUNÇÕES DE ADMIN ---
+
+        async function startNewPoll() {
+            const opcoesTexto = document.getElementById('opcoes-input').value.trim();
+            const opcoes = opcoesTexto.split('\n').map(opt => opt.trim()).filter(opt => opt.length > 0);
+
+            if (opcoes.length < 2) {
+                alert("Por favor, insira pelo menos duas opções de voto.");
                 return;
             }
 
-            const checkboxes = document.querySelectorAll('input[name="opcao"]:checked');
-            if (checkboxes.length === 0 || checkboxes.length > 3) {
-                alert('Você deve escolher de 1 a 3 opções.');
+            if (!confirm("Isso apagará TODOS os dados da votação anterior (opções e votos). Deseja continuar?")) {
                 return;
             }
 
-            const escolhas = Array.from(checkboxes).map(cb => cb.value);
-
+            showView('loading-view');
+            
             try {
-                const votoExistente = await votosRef.where('nomeEleitor', '==', nomeEleitor).where('rodada', '==', rodadaAtual).get();
-                if (!votoExistente.empty) {
-                    alert('Você já votou nesta rodada!');
-                    return;
-                }
-
-                await votosRef.add({
-                    nomeEleitor: nomeEleitor,
-                    escolhas: escolhas,
-                    rodada: rodadaAtual,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                // 1. Limpar coleção de votos
+                const votosSnapshot = await db.collection('votos').get();
+                const batchDeleteVotes = db.batch();
+                votosSnapshot.docs.forEach(doc => batchDeleteVotes.delete(doc.ref));
+                await batchDeleteVotes.commit();
+                
+                // 2. Limpar coleção de opções
+                const opcoesSnapshot = await db.collection('opcoes').get();
+                const batchDeleteOptions = db.batch();
+                opcoesSnapshot.docs.forEach(doc => batchDeleteOptions.delete(doc.ref));
+                await batchDeleteOptions.commit();
+                
+                // 3. Adicionar novas opções
+                const batchAddOptions = db.batch();
+                opcoes.forEach(nomeOpcao => {
+                    const newOpcaoRef = db.collection('opcoes').doc();
+                    batchAddOptions.set(newOpcaoRef, { nome: nomeOpcao, estaEliminada: false });
                 });
+                await batchAddOptions.commit();
 
-                alert('Voto registrado com sucesso!');
-                document.getElementById('nome').value = '';
-                checkboxes.forEach(cb => cb.checked = false);
-                document.getElementById('secao-votacao').style.display = 'none';
-                document.getElementById('status-votacao').innerText = 'Obrigado por votar! Aguarde os resultados.';
-            } catch (error) {
-                console.error("Erro ao registrar voto: ", error);
-                alert('Ocorreu um erro ao registrar seu voto.');
+                // 4. Iniciar configuração
+                await db.collection('configuracao').doc('geral').set({
+                    status: 'votacao',
+                    rodadaAtual: 1
+                });
+                
+                loadAppState(); // Recarrega o estado da aplicação
+
+            } catch(error) {
+                console.error("Erro ao iniciar nova votação: ", error);
+                alert("Ocorreu um erro. Veja o console para detalhes.");
+                loadAppState();
             }
         }
-        
+
         async function calculateResults() {
-            const apurarBtn = document.getElementById('apurar-btn');
-            apurarBtn.disabled = true;
-            apurarBtn.innerText = 'Apurando...';
-
             const resultadosContainer = document.getElementById('resultados-container');
             resultadosContainer.innerHTML = '<p>Calculando resultados...</p>';
-
+            
             try {
-                const votosSnapshot = await votosRef.where('rodada', '==', rodadaAtual).get();
+                const votosSnapshot = await db.collection('votos').where('rodada', '==', rodadaAtual).get();
                 if (votosSnapshot.empty) {
                     resultadosContainer.innerHTML = '<p>Nenhum voto foi registrado nesta rodada.</p>';
-                    apurarBtn.disabled = false;
-                    apurarBtn.innerText = 'Encerrar Rodada e Apurar Resultados';
                     return;
                 }
-
                 const totalEleitores = votosSnapshot.size;
                 const contagemVotos = {};
-                votosSnapshot.forEach(doc => doc.data().escolhas.forEach(id => { contagemVotos[id] = (contagemVotos[id] || 0) + 1; }));
-                
-                const opcoesAtivasSnapshot = await opcoesRef.where('estaEliminada', '==', false).get();
+                votosSnapshot.forEach(doc => doc.data().escolhas.forEach(id => contagemVotos[id] = (contagemVotos[id] || 0) + 1));
+
+                const opcoesAtivasSnapshot = await db.collection('opcoes').where('estaEliminada', '==', false).get();
                 const mapaNomesOpcoes = {};
-                opcoesAtivasSnapshot.forEach(doc => { mapaNomesOpcoes[doc.id] = doc.data().nome; });
+                opcoesAtivasSnapshot.forEach(doc => mapaNomesOpcoes[doc.id] = doc.data().nome);
 
                 let vencedorEncontrado = null;
-                let htmlResultados = `
-                    <h3 class="font-bold text-lg mb-2">Resultados da Rodada ${rodadaAtual}</h3>
-                    <p class="text-sm text-gray-600 mb-4">Total de eleitores: ${totalEleitores}</p>
-                    <ul class="text-left space-y-2">
-                `;
+                let htmlResultados = `<h3 class="font-bold text-lg mb-2">Resultados da Rodada ${rodadaAtual}</h3><p class="text-sm text-gray-600 mb-4">Total de eleitores: ${totalEleitores}</p><ul class="text-left space-y-2">`;
+                
                 Object.keys(mapaNomesOpcoes).forEach(id => {
                     const votos = contagemVotos[id] || 0;
                     const porcentagem = totalEleitores > 0 ? ((votos / totalEleitores) * 100).toFixed(2) : 0;
@@ -234,48 +241,88 @@ const firebaseConfig = {
                 });
                 htmlResultados += '</ul>';
 
-                const resultadoDaRodada = {
-                    numero: rodadaAtual,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                };
-
                 if (vencedorEncontrado) {
-                    htmlResultados += `<div class="mt-4 p-4 bg-green-100 text-green-800 rounded-lg"><strong>Vencedor!</strong> A opção "${vencedorEncontrado}" atingiu mais de 50% dos votos!</div>`;
-                    resultadoDaRodada.status = 'vencedor_encontrado';
+                    htmlResultados += `<div class="mt-4 p-4 bg-green-100 text-green-800 rounded-lg"><strong>Vencedor!</strong> A opção "${vencedorEncontrado}" ganhou!</div>`;
+                    resultadosContainer.innerHTML = htmlResultados;
+                    await db.collection('configuracao').doc('geral').update({ status: 'finalizada', vencedor: vencedorEncontrado });
+                    setTimeout(loadAppState, 3000); // Mostra a tela final após 3 segundos
                 } else {
-                    htmlResultados += '<div class="mt-4 p-4 bg-yellow-100 text-yellow-800 rounded-lg">';
-                    const menorVotos = Math.min(...Object.keys(mapaNomesOpcoes).map(id => contagemVotos[id] || 0));
+                    let menorVotos = Math.min(...Object.keys(mapaNomesOpcoes).map(id => contagemVotos[id] || 0));
                     const paraEliminarIds = Object.keys(mapaNomesOpcoes).filter(id => (contagemVotos[id] || 0) === menorVotos);
-                    
+
                     if (paraEliminarIds.length < Object.keys(mapaNomesOpcoes).length) {
                         const nomesEliminados = paraEliminarIds.map(id => mapaNomesOpcoes[id]);
-                        htmlResultados += `<strong>Nenhum vencedor.</strong> Opções eliminadas (${menorVotos} votos): ${nomesEliminados.join(', ')}.</div>`;
+                        htmlResultados += `<div class="mt-4 p-4 bg-yellow-100 text-yellow-800 rounded-lg"><strong>Nenhum vencedor.</strong> Eliminadas: ${nomesEliminados.join(', ')}.</div>`;
                         
                         const batch = db.batch();
-                        paraEliminarIds.forEach(id => batch.update(opcoesRef.doc(id), { estaEliminada: true }));
+                        paraEliminarIds.forEach(id => batch.update(db.collection('opcoes').doc(id), { estaEliminada: true }));
                         await batch.commit();
-
-                        await configRef.update({ rodadaAtual: rodadaAtual + 1 });
-                        htmlResultados += '<p class="mt-2 font-bold">Uma nova rodada começará. Por favor, peça para todos atualizarem a página para votar novamente.</p>';
+                        
+                        await db.collection('configuracao').doc('geral').update({ rodadaAtual: rodadaAtual + 1 });
+                        htmlResultados += '<p class="mt-2 font-bold">Iniciando nova rodada... A página será atualizada.</p>';
+                        setTimeout(() => window.location.reload(), 3000);
                     } else {
-                        htmlResultados += `<strong>Empate!</strong> Todas as opções tiveram o mesmo número de votos. Nenhuma opção será eliminada. Atualize a página para uma nova rodada.</div>`;
+                        htmlResultados += `<div class="mt-4 p-4 bg-blue-100 text-blue-800 rounded-lg"><strong>Empate!</strong> Ninguém foi eliminado. Uma nova rodada começará.</div>`;
+                        await db.collection('configuracao').doc('geral').update({ rodadaAtual: rodadaAtual + 1 });
+                         setTimeout(() => window.location.reload(), 3000);
                     }
-                    resultadoDaRodada.status = 'concluida';
                 }
-
-                // **NOVO**: Salva o resultado da rodada no banco de dados para persistência
-                resultadoDaRodada.resultadosHTML = htmlResultados;
-                await rodadasRef.doc(String(rodadaAtual)).set(resultadoDaRodada);
-                
-                resultadosContainer.innerHTML = htmlResultados;
-
-            } catch (error) {
-                console.error("Erro ao calcular resultados: ", error);
-                resultadosContainer.innerHTML = '<p class="text-red-500">Ocorreu um erro ao apurar os resultados.</p>';
-                apurarBtn.disabled = false;
-                apurarBtn.innerText = 'Encerrar Rodada e Apurar Resultados';
+                 resultadosContainer.innerHTML = htmlResultados;
+            } catch(error) {
+                console.error("Erro ao apurar: ", error);
+                resultadosContainer.innerHTML = '<p class="text-red-500">Ocorreu um erro ao apurar.</p>';
             }
         }
+
+        // --- FUNÇÕES DE VOTAÇÃO ---
+
+        async function loadVotingOptions() {
+            const snapshot = await db.collection('opcoes').where('estaEliminada', '==', false).get();
+            const container = document.getElementById('opcoes-container');
+            container.innerHTML = '';
+            
+            document.getElementById('titulo-principal').innerText = `Votação - Rodada ${rodadaAtual}`;
+
+            if (snapshot.empty) {
+                container.innerHTML = '<p class="text-center col-span-full p-8 text-gray-500">Erro: Nenhuma opção encontrada para a votação.</p>';
+                return;
+            }
+            snapshot.forEach(doc => {
+                container.innerHTML += `<label for="${doc.id}" class="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-indigo-50"><input type="checkbox" id="${doc.id}" value="${doc.id}" name="opcao" class="custom-checkbox h-5 w-5 rounded border-gray-300"><span class="font-medium text-gray-700">${doc.data().nome}</span></label>`;
+            });
+        }
+        
+        async function handleVote() {
+            const nomeEleitor = document.getElementById('nome').value.trim();
+            if (!nomeEleitor) {
+                alert('Por favor, digite seu nome para votar.');
+                return;
+            }
+            const checkboxes = document.querySelectorAll('input[name="opcao"]:checked');
+            if (checkboxes.length === 0 || checkboxes.length > 3) {
+                alert('Você deve escolher de 1 a 3 opções.');
+                return;
+            }
+            
+            try {
+                const votoExistente = await db.collection('votos').where('nomeEleitor', '==', nomeEleitor).where('rodada', '==', rodadaAtual).get();
+                if (!votoExistente.empty) {
+                    alert('Você já votou nesta rodada!');
+                    return;
+                }
+                await db.collection('votos').add({
+                    nomeEleitor: nomeEleitor,
+                    escolhas: Array.from(checkboxes).map(cb => cb.value),
+                    rodada: rodadaAtual,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                document.getElementById('secao-votacao').innerHTML = '<div class="text-center p-8"><h2 class="text-xl font-bold text-green-600">Voto registrado com sucesso!</h2><p class="text-gray-500 mt-2">Obrigado por participar. Aguarde os resultados.</p></div>';
+            } catch (error) {
+                console.error("Erro ao registrar voto: ", error);
+                alert('Ocorreu um erro ao registrar seu voto.');
+            }
+        }
+
     </script>
 </body>
 </html>
