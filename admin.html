@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Sistema de Votação</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style> body { font-family: 'Inter', sans-serif; } .hidden-view { display: none; } </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div id="app-container" class="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-6 md:p-8 space-y-6">
+
+        <!-- ===== VIEW: CARREGANDO ===== -->
+        <div id="loading-view" class="text-center p-8">
+            <h1 class="text-2xl font-bold text-indigo-700">Carregando Painel de Controle...</h1>
+        </div>
+
+        <!-- ===== VIEW: CONFIGURAÇÃO ===== -->
+        <div id="setup-view" class="hidden-view space-y-4">
+            <h1 class="text-2xl font-bold text-center text-indigo-700">Criar Nova Votação</h1>
+            <p class="text-center text-gray-600">Insira as opções de voto abaixo, uma por linha.</p>
+            <div>
+                <textarea id="opcoes-input" rows="8" class="w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="Opção A&#10;Opção B&#10;Opção C"></textarea>
+            </div>
+            <button onclick="startNewPoll()" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700">
+                Limpar Dados Anteriores e Iniciar Nova Votação
+            </button>
+        </div>
+
+        <!-- ===== VIEW: PAINEL DE CONTROLE ATIVO ===== -->
+        <div id="dashboard-view" class="hidden-view space-y-6">
+            <div class="text-center">
+                <h1 id="titulo-principal" class="text-3xl font-bold text-indigo-700">Votação em Andamento</h1>
+                <p id="rodada-atual-display" class="text-gray-500 mt-2">Monitorando Rodada 1...</p>
+            </div>
+            <div class="bg-gray-50 p-6 rounded-lg space-y-4">
+                <h2 class="text-xl font-bold text-center text-gray-800">Painel de Controle</h2>
+                <div id="vote-count-display" class="text-center my-2"><span class="font-bold text-3xl text-indigo-600">0</span> <span class="text-gray-600">votos registrados</span></div>
+                <div id="resultados-container" class="border-t pt-4 text-center">
+                    <p class="text-gray-600">A apuração aparecerá aqui após o encerramento da rodada.</p>
+                </div>
+                <button onclick="calculateResults()" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700">
+                    Encerrar Rodada e Apurar Resultados
+                </button>
+            </div>
+        </div>
+
+        <!-- ===== VIEW: FINALIZADA ===== -->
+        <div id="finished-view" class="hidden-view text-center p-8 space-y-4">
+            <h1 class="text-2xl font-bold text-green-700">Votação Finalizada!</h1>
+            <p class="text-gray-600 text-lg">O vencedor é:</p>
+            <p id="winner-name" class="text-4xl font-extrabold text-indigo-800"></p>
+            <button onclick="showSetupView()" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700">
+                Criar Nova Votação
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Scripts do Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
+  authDomain: "conclave-mdm.firebaseapp.com",
+  projectId: "conclave-mdm",
+  storageBucket: "conclave-mdm.firebasestorage.app",
+  messagingSenderId: "346904370830",                                                                          appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
+};
+        // --- CONFIGURAÇÃO DO FIREBASE ---
+        
+        let db;
+        let rodadaAtual = 1;
+        let unsubscribeVoteListener = null;
+
+        // --- INICIALIZAÇÃO E GERENCIAMENTO DE ESTADO ---
+        window.onload = function() {
+            if (firebaseConfig.apiKey === "SUA_API_KEY") {
+                document.getElementById('app-container').innerHTML = `<div class="text-center p-4 bg-red-100 text-red-800 rounded-lg"><strong>Erro:</strong> Cole suas chaves do Firebase no objeto firebaseConfig.</div>`;
+                return;
+            }
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            loadAdminState();
+        };
+
+        async function loadAdminState() {
+            const configRef = db.collection('configuracao').doc('geral');
+            const configDoc = await configRef.get();
+            showView('loading-view');
+            if (!configDoc.exists || !configDoc.data().status || configDoc.data().status === 'configuracao') {
+                showView('setup-view');
+            } else if (configDoc.data().status === 'votacao') {
+                rodadaAtual = configDoc.data().rodadaAtual;
+                document.getElementById('rodada-atual-display').innerText = `Monitorando Rodada ${rodadaAtual}...`;
+                showView('dashboard-view');
+                listenForVoteCount();
+            } else if (configDoc.data().status === 'finalizada') {
+                document.getElementById('winner-name').innerText = configDoc.data().vencedor;
+                showView('finished-view');
+            }
+        }
+        
+        function showView(viewId) {
+            ['loading-view', 'setup-view', 'dashboard-view', 'finished-view'].forEach(id => {
+                document.getElementById(id).classList.add('hidden-view');
+            });
+            document.getElementById(viewId).classList.remove('hidden-view');
+        }
+        
+        function showSetupView() {
+            showView('setup-view');
+        }
+
+        async function startNewPoll() {
+            const opcoes = document.getElementById('opcoes-input').value.trim().split('\n').filter(Boolean);
+            if (opcoes.length < 2) { alert("Insira pelo menos duas opções."); return; }
+            if (!confirm("Isso apagará TODOS os dados da votação anterior. Deseja continuar?")) return;
+            
+            showView('loading-view');
+            try {
+                const batch = db.batch();
+                (await db.collection('votos').get()).docs.forEach(doc => batch.delete(doc.ref));
+                (await db.collection('opcoes').get()).docs.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+                
+                const addBatch = db.batch();
+                opcoes.forEach(nome => addBatch.set(db.collection('opcoes').doc(), { nome, estaEliminada: false }));
+                await addBatch.commit();
+
+                await db.collection('configuracao').doc('geral').set({ status: 'votacao', rodadaAtual: 1 });
+                loadAdminState();
+            } catch(error) { console.error("Erro ao iniciar votação: ", error); loadAdminState(); }
+        }
+
+        function listenForVoteCount() {
+            if (unsubscribeVoteListener) unsubscribeVoteListener();
+            unsubscribeVoteListener = db.collection('votos').where('rodada', '==', rodadaAtual)
+                .onSnapshot(snap => {
+                    document.querySelector('#vote-count-display span:first-child').innerText = snap.size;
+                });
+        }
+
+        async function calculateResults() {
+            const resultadosContainer = document.getElementById('resultados-container');
+            resultadosContainer.innerHTML = '<p>Calculando...</p>';
+            try {
+                const votosSnapshot = await db.collection('votos').where('rodada', '==', rodadaAtual).get();
+                if (votosSnapshot.empty) { resultadosContainer.innerHTML = '<p>Nenhum voto registrado.</p>'; return; }
+                
+                const totalEleitores = votosSnapshot.size;
+                const contagemVotos = {};
+                votosSnapshot.forEach(doc => doc.data().escolhas.forEach(id => contagemVotos[id] = (contagemVotos[id] || 0) + 1));
+
+                const opcoesAtivasSnapshot = await db.collection('opcoes').where('estaEliminada', '==', false).get();
+                const mapaNomesOpcoes = Object.fromEntries(opcoesAtivasSnapshot.docs.map(doc => [doc.id, doc.data().nome]));
+
+                let vencedor = null;
+                let html = `<ul class="text-left space-y-2">`;
+                Object.entries(mapaNomesOpcoes).forEach(([id, nome]) => {
+                    const votos = contagemVotos[id] || 0;
+                    const perc = totalEleitores > 0 ? (votos / totalEleitores * 100).toFixed(2) : 0;
+                    html += `<li><strong>${nome}:</strong> ${votos} votos (${perc}%)</li>`;
+                    if (perc > 50) vencedor = nome;
+                });
+                html += '</ul>';
+
+                if (vencedor) {
+                    html += `<div class="mt-4 p-2 bg-green-100 text-green-800 rounded-lg"><strong>Vencedor:</strong> ${vencedor}!</div>`;
+                    await db.collection('configuracao').doc('geral').update({ status: 'finalizada', vencedor });
+                    if (unsubscribeVoteListener) unsubscribeVoteListener();
+                    setTimeout(loadAdminState, 3000);
+                } else {
+                    const menorVotos = Math.min(...Object.values(mapaNomesOpcoes).map(nome => contagemVotos[Object.keys(mapaNomesOpcoes).find(key => mapaNomesOpcoes[key] === nome)] || 0));
+                    const paraEliminarIds = Object.keys(mapaNomesOpcoes).filter(id => (contagemVotos[id] || 0) === menorVotos);
+
+                    if (paraEliminarIds.length < Object.keys(mapaNomesOpcoes).length) {
+                        const nomesEliminados = paraEliminarIds.map(id => mapaNomesOpcoes[id]);
+                        html += `<div class="mt-4 p-2 bg-yellow-100 text-yellow-800 rounded-lg"><strong>Eliminadas:</strong> ${nomesEliminados.join(', ')}.</div>`;
+                        const batch = db.batch();
+                        paraEliminarIds.forEach(id => batch.update(db.collection('opcoes').doc(id), { estaEliminada: true }));
+                        await batch.commit();
+                        await db.collection('configuracao').doc('geral').update({ rodadaAtual: rodadaAtual + 1 });
+                        html += '<p class="mt-2 font-bold">Iniciando nova rodada...</p>';
+                        setTimeout(() => window.location.reload(), 3000);
+                    } else {
+                        html += `<div class="mt-4 p-2 bg-blue-100 text-blue-800 rounded-lg"><strong>Empate!</strong> Ninguém eliminado.</div>`;
+                        await db.collection('configuracao').doc('geral').update({ rodadaAtual: rodadaAtual + 1 });
+                        setTimeout(() => window.location.reload(), 3000);
+                    }
+                }
+                resultadosContainer.innerHTML = html;
+            } catch(error) { console.error("Erro ao apurar: ", error); }
+        }
+    </script>
+</body>
+</html>
