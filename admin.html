@@ -37,7 +37,7 @@
             </div>
             <div class="bg-gray-50 p-6 rounded-lg space-y-4">
                 <h2 class="text-xl font-bold text-center text-gray-800">Painel de Controle</h2>
-                <div id="vote-count-display" class="text-center my-2"><span class="font-bold text-3xl text-indigo-600">0</span> <span class="text-gray-600">votos registrados</span></div>
+                <div id="vote-count-display" class="text-center my-2"><span class="font-bold text-3xl text-indigo-600">0</span> <span class="text-gray-600">eleitores participaram</span></div>
                 <div id="resultados-container" class="border-t pt-4 text-center">
                     <p class="text-gray-600">A apuração aparecerá aqui após o encerramento da rodada.</p>
                 </div>
@@ -63,13 +63,13 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <script>
-        const firebaseConfig = {
+       const firebaseConfig = {
   apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
   authDomain: "conclave-mdm.firebaseapp.com",
   projectId: "conclave-mdm",
   storageBucket: "conclave-mdm.firebasestorage.app",
   messagingSenderId: "346904370830",                                                                          appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
-};
+}; 
         let db;
         let rodadaAtual = 1;
         let unsubscribeListener = null;
@@ -153,11 +153,10 @@
                 const votosSnapshot = await db.collection('votos').where('rodada', '==', rodadaAtual).get();
                 const totalEleitores = votosSnapshot.size;
                 
-                let totalVotosComputados = 0;
+                const totalVotosComputados = votosSnapshot.docs.reduce((acc, doc) => acc + (doc.data().escolhas?.length || 0), 0);
                 const contagemVotos = {};
                 votosSnapshot.forEach(doc => {
-                    const escolhas = doc.data().escolhas;
-                    totalVotosComputados += escolhas.length;
+                    const escolhas = doc.data().escolhas || [];
                     escolhas.forEach(id => contagemVotos[id] = (contagemVotos[id] || 0) + 1);
                 });
 
@@ -180,7 +179,9 @@
                     const votos = contagemVotos[id] || 0;
                     const perc = totalVotosComputados > 0 ? (votos / totalVotosComputados * 100) : 0;
                     resultsForVoters.votosPorOpcao.push({ id, nome, votos, perc: perc.toFixed(2) });
-                    if (perc > 50) vencedor = nome;
+                    if (perc > 50) {
+                        vencedor = nome;
+                    }
                 });
                 
                 if (vencedor) {
@@ -258,3 +259,5 @@
     </script>
 </body>
 </html>
+
+
