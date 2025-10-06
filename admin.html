@@ -63,19 +63,17 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <script>
-        // --- CONFIGURAÇÃO DO FIREBASE ---
-       const firebaseConfig = {
+        const firebaseConfig = {
   apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
   authDomain: "conclave-mdm.firebaseapp.com",
   projectId: "conclave-mdm",
   storageBucket: "conclave-mdm.firebasestorage.app",
   messagingSenderId: "346904370830",                                                                          appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
-}; 
+};
         let db;
         let rodadaAtual = 1;
         let unsubscribeListener = null;
 
-        // --- INICIALIZAÇÃO E GERENCIAMENTO DE ESTADO ---
         window.onload = function() {
             if (firebaseConfig.apiKey === "SUA_API_KEY") {
                 document.getElementById('app-container').innerHTML = `<div class="text-center p-4 bg-red-100 text-red-800 rounded-lg"><strong>Erro:</strong> Cole suas chaves do Firebase.</div>`;
@@ -83,7 +81,7 @@
             }
             firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
-            listenToConfigChanges(); // Ouvinte em tempo real para o estado
+            listenToConfigChanges();
         };
 
         function listenToConfigChanges() {
@@ -91,22 +89,25 @@
                 showView('loading-view');
                 if (!doc.exists || !doc.data().status || doc.data().status === 'configuracao') {
                     showView('setup-view');
-                } else if (doc.data().status === 'votacao') {
-                    rodadaAtual = doc.data().rodadaAtual;
-                    document.getElementById('rodada-atual-display').innerText = `Monitorando Rodada ${rodadaAtual}...`;
-                    document.getElementById('apurar-btn').style.display = 'block';
-                    document.getElementById('resultados-container').innerHTML = '<p class="text-gray-600">Aguardando o encerramento da rodada.</p>';
-                    showView('dashboard-view');
-                    listenForVoteCount();
-                } else if (doc.data().status === 'apuracao') {
-                    rodadaAtual = doc.data().rodadaAtual;
-                    document.getElementById('rodada-atual-display').innerText = `Resultados da Rodada ${rodadaAtual}`;
-                    showView('dashboard-view');
-                    displayResultsForAdmin(JSON.parse(doc.data().partialResults));
-                } else if (doc.data().status === 'finalizada') {
-                    document.getElementById('winner-name').innerText = doc.data().vencedor;
-                    showView('finished-view');
-                    if (unsubscribeListener) unsubscribeListener();
+                } else {
+                    const data = doc.data();
+                    if (data.status === 'votacao') {
+                        rodadaAtual = data.rodadaAtual;
+                        document.getElementById('rodada-atual-display').innerText = `Monitorando Rodada ${rodadaAtual}...`;
+                        document.getElementById('apurar-btn').style.display = 'block';
+                        document.getElementById('resultados-container').innerHTML = '<p class="text-gray-600">Aguardando o encerramento da rodada.</p>';
+                        showView('dashboard-view');
+                        listenForVoteCount();
+                    } else if (data.status === 'apuracao') {
+                        rodadaAtual = data.rodadaAtual;
+                        document.getElementById('rodada-atual-display').innerText = `Resultados da Rodada ${rodadaAtual}`;
+                        showView('dashboard-view');
+                        displayResultsForAdmin(JSON.parse(data.partialResults));
+                    } else if (data.status === 'finalizada') {
+                        document.getElementById('winner-name').innerText = data.vencedor;
+                        showView('finished-view');
+                        if (unsubscribeListener) unsubscribeListener();
+                    }
                 }
             });
         }
@@ -121,7 +122,6 @@
         function showSetupView() { showView('setup-view'); }
 
         async function startNewPoll() {
-            // (Código inalterado)
             const opcoes = document.getElementById('opcoes-input').value.trim().split('\n').filter(Boolean);
             if (opcoes.length < 2) { alert("Insira pelo menos duas opções."); return; }
             if (!confirm("Isso apagará TODOS os dados da votação anterior. Deseja continuar?")) return;
@@ -153,8 +153,13 @@
                 const votosSnapshot = await db.collection('votos').where('rodada', '==', rodadaAtual).get();
                 const totalEleitores = votosSnapshot.size;
                 
+                let totalVotosComputados = 0;
                 const contagemVotos = {};
-                votosSnapshot.forEach(doc => doc.data().escolhas.forEach(id => contagemVotos[id] = (contagemVotos[id] || 0) + 1));
+                votosSnapshot.forEach(doc => {
+                    const escolhas = doc.data().escolhas;
+                    totalVotosComputados += escolhas.length;
+                    escolhas.forEach(id => contagemVotos[id] = (contagemVotos[id] || 0) + 1);
+                });
 
                 const opcoesAtivasSnapshot = await db.collection('opcoes').where('estaEliminada', '==', false).get();
                 const mapaNomesOpcoes = Object.fromEntries(opcoesAtivasSnapshot.docs.map(doc => [doc.id, doc.data().nome]));
@@ -162,67 +167,78 @@
                 let vencedor = null;
                 const resultsForVoters = {
                     totalEleitores: totalEleitores,
+                    totalVotosComputados: totalVotosComputados,
                     votosPorOpcao: [],
                     vencedor: null,
-                    eliminadas: []
+                    eliminadasNomes: [],
+                    eliminadasIds: []
                 };
 
                 opcoesAtivasSnapshot.docs.forEach(doc => {
                     const id = doc.id;
                     const nome = doc.data().nome;
                     const votos = contagemVotos[id] || 0;
-                    const perc = totalEleitores > 0 ? (votos / totalEleitores * 100) : 0;
-                    resultsForVoters.votosPorOpcao.push({ nome, votos, perc: perc.toFixed(2) });
+                    const perc = totalVotosComputados > 0 ? (votos / totalVotosComputados * 100) : 0;
+                    resultsForVoters.votosPorOpcao.push({ id, nome, votos, perc: perc.toFixed(2) });
                     if (perc > 50) vencedor = nome;
                 });
                 
-                const menorVotos = Math.min(...opcoesAtivasSnapshot.docs.map(doc => contagemVotos[doc.id] || 0));
-                const paraEliminarIds = opcoesAtivasSnapshot.docs.filter(doc => (contagemVotos[doc.id] || 0) === menorVotos).map(d => d.id);
-                
                 if (vencedor) {
                     resultsForVoters.vencedor = vencedor;
-                } else if (paraEliminarIds.length < opcoesAtivasSnapshot.size) {
-                    resultsForVoters.eliminadas = paraEliminarIds.map(id => mapaNomesOpcoes[id]);
+                } else {
+                    const menorVotos = Math.min(...opcoesAtivasSnapshot.docs.map(doc => contagemVotos[doc.id] || 0));
+                    const paraEliminarIds = opcoesAtivasSnapshot.docs.filter(doc => (contagemVotos[doc.id] || 0) === menorVotos).map(d => d.id);
+                    if (paraEliminarIds.length < opcoesAtivasSnapshot.size) {
+                        resultsForVoters.eliminadasIds = paraEliminarIds;
+                        resultsForVoters.eliminadasNomes = paraEliminarIds.map(id => mapaNomesOpcoes[id]);
+                    }
                 }
-
+                
                 await db.collection('configuracao').doc('geral').update({
                     status: 'apuracao',
                     partialResults: JSON.stringify(resultsForVoters)
                 });
 
-            } catch(error) { console.error("Erro ao apurar: ", error); }
+            } catch(error) { console.error("Erro ao apurar: ", error); document.getElementById('apurar-btn').disabled = false; }
         }
 
         function displayResultsForAdmin(results) {
             const container = document.getElementById('resultados-container');
-            let html = `<ul class="text-left space-y-2">`;
-            results.votosPorOpcao.forEach(opt => {
+            let html = `<div class="text-left"><p class="text-sm text-gray-600 mb-2">Total de votos: ${results.totalVotosComputados} | Eleitores: ${results.totalEleitores}</p><ul class="space-y-2">`;
+            results.votosPorOpcao.sort((a,b) => b.votos - a.votos).forEach(opt => {
                 html += `<li><strong>${opt.nome}:</strong> ${opt.votos} votos (${opt.perc}%)</li>`;
             });
-            html += '</ul>';
+            html += '</ul></div>';
 
             if (results.vencedor) {
-                html += `<div class="mt-4 p-2 bg-green-100 text-green-800 rounded-lg"><strong>Vencedor detectado!</strong></div>`;
+                html += `<div class="mt-4 p-2 bg-green-100 text-green-800 rounded-lg"><strong>Vencedor detectado: ${results.vencedor}!</strong></div>`;
                 html += `<button onclick="confirmWinner('${results.vencedor}')" class="mt-4 w-full bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Declarar Vencedor</button>`;
             } else {
-                if(results.eliminadas.length > 0) {
-                     html += `<div class="mt-4 p-2 bg-yellow-100 text-yellow-800 rounded-lg"><strong>Eliminadas:</strong> ${results.eliminadas.join(', ')}.</div>`;
+                if (results.eliminadasIds && results.eliminadasIds.length > 0) {
+                    html += `<div class="mt-6 border-t pt-4"><h3 class="font-bold text-left mb-2">Controle de Eliminação</h3><p class="text-left text-sm text-gray-600 mb-2">Desmarque para salvar um candidato da eliminação.</p><div id="elimination-toggles" class="space-y-1 text-left">`;
+                    results.eliminadasIds.forEach(id => {
+                        const option = results.votosPorOpcao.find(o => o.id === id);
+                        html += `<div><input type="checkbox" id="elim-${id}" value="${id}" class="elimination-toggle" checked> <label for="elim-${id}">${option.nome}</label></div>`;
+                    });
+                    html += `</div></div>`;
                 } else {
-                     html += `<div class="mt-4 p-2 bg-blue-100 text-blue-800 rounded-lg"><strong>Empate!</strong> Ninguém será eliminado.</div>`;
+                    html += `<div class="mt-4 p-2 bg-blue-100 text-blue-800 rounded-lg"><strong>Empate!</strong> Ninguém foi sugerido para eliminação.</div>`;
                 }
-                const paraEliminarIds = results.eliminadas.map(nome => {
-                    return db.collection('opcoes').where('nome', '==', nome).get().then(snap => snap.docs[0].id)
-                });
-                Promise.all(paraEliminarIds).then(ids => {
-                    container.innerHTML += `<button onclick='startNextRound(${JSON.stringify(ids)})' class="mt-4 w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Iniciar Próxima Rodada</button>`;
-                });
+                html += `<button onclick='startNextRoundFromToggle()' class="mt-4 w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Iniciar Próxima Rodada</button>`;
             }
             container.innerHTML = html;
             document.getElementById('apurar-btn').style.display = 'none';
         }
 
         async function confirmWinner(winnerName) {
+            if (!confirm(`Tem certeza que deseja declarar "${winnerName}" como vencedor(a)? Esta ação é final.`)) return;
             await db.collection('configuracao').doc('geral').update({ status: 'finalizada', vencedor: winnerName });
+        }
+        
+        function startNextRoundFromToggle() {
+            const toggles = document.querySelectorAll('.elimination-toggle:checked');
+            const idsParaEliminar = Array.from(toggles, t => t.value);
+            startNextRound(idsParaEliminar);
         }
 
         async function startNextRound(idsParaEliminar) {
@@ -235,7 +251,8 @@
 
             await db.collection('configuracao').doc('geral').update({
                 status: 'votacao',
-                rodadaAtual: rodadaAtual + 1
+                rodadaAtual: rodadaAtual + 1,
+                partialResults: '{}'
             });
         }
     </script>
