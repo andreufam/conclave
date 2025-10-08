@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Sistema de Votação</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style> body { font-family: 'Inter', sans-serif; } .hidden-view { display: none; } </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div id="app-container" class="w-full max-w-3xl bg-white rounded-2xl shadow-lg p-6 md:p-8 space-y-6">
+
+        <!-- ===== VIEW: CARREGANDO ===== -->
+        <div id="loading-view" class="text-center p-8">
+            <h1 class="text-2xl font-bold text-indigo-700">Carregando Painel de Controle...</h1>
+        </div>
+
+        <!-- ===== VIEW: CONFIGURAÇÃO ===== -->
+        <div id="setup-view" class="hidden-view space-y-4">
+            <h1 class="text-2xl font-bold text-center text-indigo-700">Criar Nova Votação</h1>
+            <p class="text-center text-gray-600">Insira as opções de voto abaixo, uma por linha.</p>
+            <div>
+                <textarea id="opcoes-input" rows="8" class="w-full p-2 border border-gray-300 rounded-md shadow-sm" placeholder="Opção A&#10;Opção B&#10;Opção C"></textarea>
+            </div>
+            <button onclick="startNewPoll()" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700">
+                Limpar Dados Anteriores e Iniciar Nova Votação
+            </button>
+        </div>
+
+        <!-- ===== VIEW: PAINEL DE CONTROLE ATIVO ===== -->
+        <div id="dashboard-view" class="hidden-view space-y-6">
+            <div class="text-center">
+                <h1 id="titulo-principal" class="text-3xl font-bold text-indigo-700">Votação em Andamento</h1>
+                <p id="rodada-atual-display" class="text-gray-500 mt-2">Monitorando Rodada 1...</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Coluna da Esquerda: Controle -->
+                <div class="bg-gray-50 p-6 rounded-lg space-y-4">
+                    <h2 class="text-xl font-bold text-center text-gray-800">Painel de Controle</h2>
+                    <div id="vote-count-display" class="text-center my-2"><span class="font-bold text-3xl text-indigo-600">0</span> <span class="text-gray-600">votos registrados</span></div>
+                    <div id="resultados-container" class="border-t pt-4 text-center">
+                        <p class="text-gray-600">A apuração aparecerá aqui.</p>
+                    </div>
+                    <button id="apurar-btn" onclick="calculateResults()" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700">
+                        Encerrar Rodada e Apurar Resultados
+                    </button>
+                </div>
+                <!-- Coluna da Direita: Lista de Votos -->
+                <div class="bg-gray-50 p-6 rounded-lg">
+                    <h2 class="text-xl font-bold text-center text-gray-800 mb-4">Votos Registrados</h2>
+                    <div id="voter-list-container" class="h-64 overflow-y-auto border rounded-md p-2 bg-white">
+                        <p class="text-gray-500 text-center">Nenhum voto ainda.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== VIEW: FINALIZADA ===== -->
+        <div id="finished-view" class="hidden-view text-center p-8 space-y-4">
+            <h1 class="text-2xl font-bold text-green-700">Votação Finalizada!</h1>
+            <p class="text-gray-600 text-lg">O vencedor é:</p>
+            <p id="winner-name" class="text-4xl font-extrabold text-indigo-800"></p>
+            <button onclick="showSetupView()" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700">
+                Criar Nova Votação
+            </button>
+        </div>
+    </div>
+
+    <!-- Scripts do Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script>
+       const firebaseConfig = {
+  apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
+  authDomain: "conclave-mdm.firebaseapp.com",
+  projectId: "conclave-mdm",
+  storageBucket: "conclave-mdm.firebasestorage.app",
+  messagingSenderId: "346904370830",                                                                          appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
+};
+
+        let db;
+        let rodadaAtual = 1;
+        let unsubscribeVotos = null;
+        let unsubscribeConfig = null;
+
+        window.onload = function() {
+            if (firebaseConfig.apiKey === "SUA_API_KEY") {
+                document.getElementById('app-container').innerHTML = `<div class="text-center p-4 bg-red-100 text-red-800 rounded-lg"><strong>Erro:</strong> Cole suas chaves do Firebase.</div>`;
+                return;
+            }
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            listenToConfigChanges();
+        };
+
+        function listenToConfigChanges() {
+            if (unsubscribeConfig) unsubscribeConfig();
+            unsubscribeConfig = db.collection('configuracao').doc('geral').onSnapshot(doc => {
+                showView('loading-view');
+                if (!doc.exists || !doc.data().status || doc.data().status === 'configuracao') {
+                    showView('setup-view');
+                } else {
+                    const data = doc.data();
+                    rodadaAtual = data.rodadaAtual;
+                    if (data.status === 'votacao') {
+                        document.getElementById('rodada-atual-display').innerText = `Monitorando Rodada ${rodadaAtual}...`;
+                        document.getElementById('apurar-btn').style.display = 'block';
+                        document.getElementById('resultados-container').innerHTML = '<p class="text-gray-600">Aguardando o encerramento da rodada.</p>';
+                        showView('dashboard-view');
+                        listenToVoters();
+                    } else if (data.status === 'apuracao') {
+                        document.getElementById('rodada-atual-display').innerText = `Resultados da Rodada ${rodadaAtual}`;
+                        showView('dashboard-view');
+                        if (unsubscribeVotos) unsubscribeVotos();
+                        displayResultsForAdmin(JSON.parse(data.partialResults));
+                    } else if (data.status === 'finalizada') {
+                        document.getElementById('winner-name').innerText = data.vencedor;
+                        showView('finished-view');
+                        if (unsubscribeVotos) unsubscribeVotos();
+                    }
+                }
+            });
+        }
+        
+        function showView(viewId) {
+            ['loading-view', 'setup-view', 'dashboard-view', 'finished-view'].forEach(id => {
+                document.getElementById(id).classList.add('hidden-view');
+            });
+            document.getElementById(viewId).classList.remove('hidden-view');
+        }
+        
+        function showSetupView() { showView('setup-view'); }
+
+        async function startNewPoll() {
+            const opcoes = document.getElementById('opcoes-input').value.trim().split('\n').filter(Boolean);
+            if (opcoes.length < 2) { alert("Insira pelo menos duas opções."); return; }
+            if (!confirm("Isso apagará TODOS os dados da votação anterior. Deseja continuar?")) return;
+            showView('loading-view');
+            try {
+                const batch = db.batch();
+                (await db.collection('votos').get()).docs.forEach(doc => batch.delete(doc.ref));
+                (await db.collection('opcoes').get()).docs.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+                const addBatch = db.batch();
+                opcoes.forEach(nome => addBatch.set(db.collection('opcoes').doc(), { nome, estaEliminada: false }));
+                await addBatch.commit();
+                await db.collection('configuracao').doc('geral').set({ status: 'votacao', rodadaAtual: 1, partialResults: '{}' });
+            } catch(error) { console.error("Erro ao iniciar votação: ", error); }
+        }
+
+        function listenToVoters() {
+            if (unsubscribeVotos) unsubscribeVotos();
+            unsubscribeVotos = db.collection('votos').where('rodada', '==', rodadaAtual)
+                .onSnapshot(snap => {
+                    document.querySelector('#vote-count-display span:first-child').innerText = snap.size;
+                    const container = document.getElementById('voter-list-container');
+                    if (snap.empty) {
+                        container.innerHTML = '<p class="text-gray-500 text-center">Nenhum voto ainda.</p>';
+                        return;
+                    }
+                    container.innerHTML = '<ul class="divide-y divide-gray-200"></ul>';
+                    const list = container.querySelector('ul');
+                    snap.docs.forEach(doc => {
+                        const data = doc.data();
+                        const li = document.createElement('li');
+                        li.className = 'py-2 px-2 flex justify-between items-center text-sm';
+                        li.innerHTML = `
+                            <span class="text-gray-800">${data.nomeEleitor}</span>
+                            <button onclick="deleteVote('${doc.id}', '${data.nomeEleitor}')" class="text-red-500 hover:text-red-700 font-semibold text-xs">Excluir</button>
+                        `;
+                        list.appendChild(li);
+                    });
+                });
+        }
+
+        async function deleteVote(voteId, voterName) {
+            if (confirm(`Tem certeza que deseja excluir o voto de ${voterName}? Esta pessoa poderá votar novamente.`)) {
+                await db.collection('votos').doc(voteId).delete();
+            }
+        }
+
+        async function calculateResults() {
+            document.getElementById('apurar-btn').disabled = true;
+            document.getElementById('resultados-container').innerHTML = '<p>Calculando...</p>';
+            try {
+                const votosSnapshot = await db.collection('votos').where('rodada', '==', rodadaAtual).get();
+                const totalVotos = votosSnapshot.size;
+                
+                const contagemVotos = {};
+                votosSnapshot.forEach(doc => {
+                    const escolha = doc.data().escolha;
+                    if(escolha) contagemVotos[escolha] = (contagemVotos[escolha] || 0) + 1;
+                });
+
+                const opcoesAtivasSnapshot = await db.collection('opcoes').where('estaEliminada', '==', false).get();
+                
+                let vencedor = null;
+                const resultsForVoters = {
+                    totalVotos: totalVotos,
+                    votosPorOpcao: [],
+                    vencedor: null,
+                };
+
+                opcoesAtivasSnapshot.docs.forEach(doc => {
+                    const id = doc.id;
+                    const nome = doc.data().nome;
+                    const votos = contagemVotos[id] || 0;
+                    const perc = totalVotos > 0 ? (votos / totalVotos * 100) : 0;
+                    resultsForVoters.votosPorOpcao.push({ id, nome, votos, perc: perc.toFixed(2) });
+                    if (perc > 50) {
+                        vencedor = nome;
+                    }
+                });
+                
+                if (vencedor) resultsForVoters.vencedor = vencedor;
+                
+                await db.collection('configuracao').doc('geral').update({
+                    status: 'apuracao',
+                    partialResults: JSON.stringify(resultsForVoters)
+                });
+
+            } catch(error) { console.error("Erro ao apurar: ", error); document.getElementById('apurar-btn').disabled = false; }
+        }
+
+        function displayResultsForAdmin(results) {
+            const container = document.getElementById('resultados-container');
+            let html = `<div class="text-left"><p class="text-sm text-gray-600 mb-2">Total de votos: ${results.totalVotos}</p><ul class="space-y-2">`;
+            results.votosPorOpcao.sort((a,b) => b.votos - a.votos).forEach(opt => {
+                html += `<li><strong>${opt.nome}:</strong> ${opt.votos} votos (${opt.perc}%)</li>`;
+            });
+            html += '</ul></div>';
+
+            if (results.vencedor) {
+                html += `<div class="mt-4 p-2 bg-green-100 text-green-800 rounded-lg"><strong>Vencedor detectado: ${results.vencedor}!</strong></div>`;
+                html += `<button onclick="confirmWinner('${results.vencedor}')" class="mt-4 w-full bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Declarar Vencedor</button>`;
+            } else {
+                html += `<div class="mt-6 border-t pt-4"><h3 class="font-bold text-left mb-2">Controle de Eliminação</h3><p class="text-left text-sm text-gray-600 mb-2">Marque as opções que deseja ELIMINAR.</p><div id="elimination-toggles" class="space-y-1 text-left">`;
+                results.votosPorOpcao.forEach(option => {
+                    html += `<div><input type="checkbox" id="elim-${option.id}" value="${option.id}" class="elimination-toggle"> <label for="elim-${option.id}">${option.nome}</label></div>`;
+                });
+                html += `</div></div>`;
+                html += `<button onclick='startNextRoundFromToggle()' class="mt-4 w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Iniciar Próxima Rodada com os Eliminados</button>`;
+            }
+            container.innerHTML = html;
+            document.getElementById('apurar-btn').style.display = 'none';
+        }
+
+        async function confirmWinner(winnerName) {
+            if (!confirm(`Tem certeza que deseja declarar "${winnerName}" como vencedor(a)? Esta ação é final.`)) return;
+            await db.collection('configuracao').doc('geral').update({ status: 'finalizada', vencedor: winnerName });
+        }
+        
+        function startNextRoundFromToggle() {
+            const toggles = document.querySelectorAll('.elimination-toggle:checked');
+            const idsParaEliminar = Array.from(toggles, t => t.value);
+            
+            const remainingOptionsCount = document.querySelectorAll('.elimination-toggle').length - idsParaEliminar.length;
+            if (remainingOptionsCount < 2) {
+                alert("É preciso manter pelo menos 2 opções para a próxima rodada.");
+                return;
+            }
+            startNextRound(idsParaEliminar);
+        }
+
+        async function startNextRound(idsParaEliminar) {
+            const batch = db.batch();
+            idsParaEliminar.forEach(id => {
+                const docRef = db.collection('opcoes').doc(id);
+                batch.update(docRef, { estaEliminada: true });
+            });
+            await batch.commit();
+            await db.collection('configuracao').doc('geral').update({
+                status: 'votacao',
+                rodadaAtual: rodadaAtual + 1,
+                partialResults: '{}'
+            });
+        }
+    </script>
+</body>
+</html>

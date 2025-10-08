@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Votação</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style> body { font-family: 'Inter', sans-serif; } .hidden-view { display: none; } </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+    <div id="app-container" class="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-6 md:p-8 space-y-6">
+
+        <!-- ===== VIEW: A CARREGAR ===== -->
+        <div id="loading-view" class="text-center p-8">
+            <h1 class="text-2xl font-bold text-indigo-700">A Carregar Votação...</h1>
+        </div>
+        
+        <!-- ===== VIEW: A AGUARDAR INÍCIO ===== -->
+        <div id="waiting-view" class="hidden-view text-center p-8">
+            <h1 class="text-2xl font-bold text-indigo-700">Votação em Breve</h1>
+            <p class="text-gray-500 mt-2">O administrador ainda não iniciou a votação. Por favor, aguarde.</p>
+        </div>
+
+        <!-- ===== VIEW: VOTAÇÃO ATIVA ===== -->
+        <div id="voting-view" class="hidden-view space-y-6">
+            <div class="text-center">
+                <h1 id="titulo-principal" class="text-3xl font-bold text-indigo-700">Votação - Ronda 1</h1>
+            </div>
+            <div id="user-input-section" class="space-y-4">
+                 <p class="text-center text-gray-600">Para começar, digite o seu nome e clique em "Verificar".</p>
+                 <input type="text" id="nome-eleitor-input" class="w-full p-3 border border-gray-300 rounded-md shadow-sm" placeholder="O seu nome completo">
+                 <button onclick="checkUserVoteStatus()" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700">Verificar / Carregar Votação</button>
+            </div>
+            <div id="secao-votacao" class="hidden-view space-y-4">
+                <p class="text-center text-gray-500">Olá <strong id="voter-name-display"></strong>! Escolha a sua opção abaixo.</p>
+                <div id="opcoes-container" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+                <button onclick="handleVote()" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700">Votar</button>
+            </div>
+        </div>
+
+        <!-- ===== VIEW: VOTO COMPUTADO, A AGUARDAR ===== -->
+        <div id="voted-waiting-view" class="hidden-view text-center p-8">
+            <h1 class="text-2xl font-bold text-green-700">Voto Registado!</h1>
+            <p class="text-gray-500 mt-2">Obrigado por participar, <strong id="voter-name-final"></strong>. Votou em <strong id="voted-for-option"></strong>.</p>
+            <p class="text-gray-500 mt-2">A aguardar o fim da ronda e os resultados...</p>
+        </div>
+        
+        <!-- ===== VIEW: RESULTADOS PARCIAIS ===== -->
+        <div id="partial-results-view" class="hidden-view text-center p-8">
+            <h1 id="partial-results-title" class="text-2xl font-bold text-indigo-700">Resultados da Ronda</h1>
+            <div id="partial-results-content" class="mt-4 text-left space-y-2"></div>
+            <p class="mt-6 text-gray-600 animate-pulse">A aguardar o administrador iniciar a próxima ronda...</p>
+        </div>
+
+        <!-- ===== VIEW: FINALIZADA ===== -->
+        <div id="finished-view" class="hidden-view text-center p-8">
+            <h1 class="text-2xl font-bold text-green-700">Votação Finalizada!</h1>
+            <p class="text-gray-600 mt-4 text-lg">O vencedor é:</p>
+            <p id="winner-name" class="text-4xl font-extrabold text-indigo-800 mt-2"></p>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script>
+       const firebaseConfig = {
+  apiKey: "AIzaSyAAurSgMed_-6V6uQw1-2x47-sqG5FZpx8",
+  authDomain: "conclave-mdm.firebaseapp.com",
+  projectId: "conclave-mdm",
+  storageBucket: "conclave-mdm.firebasestorage.app",
+  messagingSenderId: "346904370830",                                                                          appId: "1:346904370830:web:d52bf953d511ebaf1eb3df"
+}; 
+        let db;
+        let rodadaAtual = 1;
+        let unsubscribeConfigVoter = null;
+
+        window.onload = function() {
+            if (firebaseConfig.apiKey === "SUA_API_KEY") {
+                document.getElementById('app-container').innerHTML = `<div class="text-center p-4 bg-red-100 text-red-800 rounded-lg"><strong>Erro:</strong> Aplicação não configurada.</div>`;
+                return;
+            }
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            document.getElementById('nome-eleitor-input').value = localStorage.getItem('eleitor_nome') || '';
+            listenToStateChanges();
+        };
+
+        function listenToStateChanges() {
+            if (unsubscribeConfigVoter) unsubscribeConfigVoter();
+            unsubscribeConfigVoter = db.collection('configuracao').doc('geral').onSnapshot(doc => {
+                showView('loading-view');
+                if (!doc.exists || !doc.data().status || doc.data().status === 'configuracao') {
+                    showView('waiting-view');
+                } else {
+                    const data = doc.data();
+                    const oldRound = rodadaAtual;
+                    rodadaAtual = data.rodadaAtual;
+                    
+                    if (data.status === 'votacao') {
+                        document.getElementById('titulo-principal').innerText = `Votação - Ronda ${rodadaAtual}`;
+                        showView('voting-view');
+                        // Se a ronda mudou, esconde as opções de voto até o utilizador verificar de novo
+                        if (oldRound !== rodadaAtual) {
+                            document.getElementById('secao-votacao').classList.add('hidden-view');
+                            document.getElementById('user-input-section').classList.remove('hidden-view');
+                        } else {
+                            // Mantém o estado atual se a ronda não mudou
+                            checkUserVoteStatus();
+                        }
+                    } else if (data.status === 'apuracao') {
+                        displayPartialResults(JSON.parse(data.partialResults));
+                        showView('partial-results-view');
+                    } else if (data.status === 'finalizada') {
+                        document.getElementById('winner-name').innerText = data.vencedor;
+                        showView('finished-view');
+                    }
+                }
+            });
+        }
+
+        function showView(viewId) {
+            const allViews = ['loading-view', 'waiting-view', 'voting-view', 'voted-waiting-view', 'partial-results-view', 'finished-view'];
+            allViews.forEach(id => document.getElementById(id).classList.add('hidden-view'));
+            document.getElementById(viewId).classList.remove('hidden-view');
+        }
+        
+        async function checkUserVoteStatus() {
+            const nomeInput = document.getElementById('nome-eleitor-input');
+            const nome = nomeInput.value.trim();
+            if (!nome) { alert('Por favor, insira o seu nome.'); return; }
+            localStorage.setItem('eleitor_nome', nome);
+
+            const voteQuery = await db.collection('votos').where('rodada', '==', rodadaAtual).where('nomeEleitor', '==', nome).limit(1).get();
+
+            if (!voteQuery.empty) {
+                const voteData = voteQuery.docs[0].data();
+                const optionDoc = await db.collection('opcoes').doc(voteData.escolha).get();
+                document.getElementById('voter-name-final').innerText = nome;
+                document.getElementById('voted-for-option').innerText = optionDoc.exists ? optionDoc.data().nome : 'Opção Inválida';
+                showView('voted-waiting-view');
+            } else {
+                document.getElementById('user-input-section').classList.add('hidden-view');
+                document.getElementById('secao-votacao').classList.remove('hidden-view');
+                document.getElementById('voter-name-display').innerText = nome;
+                loadVotingOptions();
+            }
+        }
+
+        async function loadVotingOptions() {
+            const snapshot = await db.collection('opcoes').where('estaEliminada', '==', false).get();
+            const container = document.getElementById('opcoes-container');
+            container.innerHTML = '';
+            snapshot.forEach(doc => {
+                container.innerHTML += `<label for="${doc.id}" class="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-indigo-50"><input type="radio" id="${doc.id}" value="${doc.id}" name="opcao" class="h-5 w-5"><span class="font-medium text-gray-700">${doc.data().nome}</span></label>`;
+            });
+        }
+
+        function displayPartialResults(results) {
+            document.getElementById('partial-results-title').innerText = `Resultados da Ronda ${rodadaAtual}`;
+            const container = document.getElementById('partial-results-content');
+            let html = `<p class="text-sm text-gray-600 mb-4">Total de votos: ${results.totalVotos}</p><ul class="space-y-2">`;
+            results.votosPorOpcao.sort((a,b) => b.votos - a.votos).forEach(opt => {
+                html += `<li><strong>${opt.nome}:</strong> ${opt.votos} votos (${opt.perc}%)</li>`;
+            });
+            html += `</ul>`;
+
+            const eliminadas = results.votosPorOpcao.filter(o => o.eliminada).map(o => o.nome);
+            if (eliminadas.length > 0) {
+                 html += `<div class="mt-4 p-2 bg-yellow-100 text-yellow-800 rounded-lg"><strong>Opções Eliminadas nesta ronda:</strong> ${eliminadas.join(', ')}.</div>`;
+            }
+            container.innerHTML = html;
+        }
+        
+        async function handleVote() {
+            const nome = document.getElementById('nome-eleitor-input').value.trim();
+            const checkedRadio = document.querySelector('input[name="opcao"]:checked');
+            if (!checkedRadio) { alert('Escolha uma opção para votar.'); return; }
+            
+            try {
+                document.querySelector('#secao-votacao button').disabled = true;
+                await db.collection('votos').add({
+                    escolha: checkedRadio.value,
+                    nomeEleitor: nome,
+                    rodada: rodadaAtual,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                checkUserVoteStatus(); // Re-verifica o estado, que agora vai mostrar o voto
+            } catch (error) { 
+                console.error("Erro ao votar: ", error); 
+                alert('Ocorreu um erro.');
+                document.querySelector('#secao-votacao button').disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
